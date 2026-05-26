@@ -33,6 +33,18 @@ def format_value(value: Any, empty_value: str = "Unknown") -> str:
     return str(value)
 
 
+def get_expected_kbs(kb_entries: list[dict[str, Any]]) -> list[str]:
+    """Return sorted KBs expected from the advisory map."""
+
+    return sorted(
+        {
+            entry.get("KB")
+            for entry in kb_entries
+            if entry.get("KB")
+        }
+    )
+
+
 def get_missing_entries(
     kb_entries: list[dict[str, Any]],
     missing_kbs: list[str],
@@ -46,6 +58,18 @@ def get_missing_entries(
         for entry in kb_entries
         if entry.get("KB") in missing_set
     ]
+
+
+def get_superseded_kbs(kb_entries: list[dict[str, Any]]) -> list[str]:
+    """Return sorted KBs referenced as superseded by advisory entries."""
+
+    superseded_kbs: set[str] = set()
+
+    for entry in kb_entries:
+        for superseded_kb in entry.get("Supersedes") or []:
+            superseded_kbs.add(superseded_kb)
+
+    return sorted(superseded_kbs)
 
 
 # ------------------------------------------------------------
@@ -66,18 +90,46 @@ def build_key_value_table(rows: list[tuple[str, Any]]) -> list[str]:
     return lines
 
 
-def build_metric_explanation_table(rows: list[tuple[str, Any, str]]) -> list[str]:
-    """Build a Markdown table containing metrics and explanations."""
+def build_kb_state_table(
+    kb_entries: list[dict[str, Any]],
+    installed_kbs: list[str],
+    missing_kbs: list[str],
+) -> list[str]:
+    """Build a KB state table with counts and actual KB values."""
 
-    lines = [
-        "| Metric | Value | Explanation |",
-        "|---|---:|---|",
+    expected_kbs = get_expected_kbs(kb_entries)
+    superseded_kbs = get_superseded_kbs(kb_entries)
+
+    rows = [
+        (
+            "Expected",
+            len(expected_kbs),
+            format_list(expected_kbs),
+        ),
+        (
+            "Installed",
+            len(installed_kbs),
+            format_list(installed_kbs),
+        ),
+        (
+            "Superseded",
+            len(superseded_kbs),
+            format_list(superseded_kbs),
+        ),
+        (
+            "Missing",
+            len(missing_kbs),
+            format_list(missing_kbs, "None"),
+        ),
     ]
 
-    for metric, value, explanation in rows:
-        lines.append(
-            f"| {metric} | {format_value(value, '0')} | {explanation} |"
-        )
+    lines = [
+        "| KB State | Count | KBs |",
+        "|---|---|---|",
+    ]
+
+    for state, count, kbs in rows:
+        lines.append(f"| {state} | {count} | {kbs} |")
 
     return lines
 
@@ -90,7 +142,7 @@ def build_missing_kb_evidence_table(
 
     lines = [
         "| ID | KB | Status | Months | CVE Count | CVEs | Supersedes | Update Type |",
-        "|---:|---|---|---|---:|---|---|---|",
+        "|---|---|---|---|---|---|---|---|",
     ]
 
     missing_entries = get_missing_entries(
@@ -99,7 +151,7 @@ def build_missing_kb_evidence_table(
     )
 
     if not missing_entries:
-        lines.append("| 0 | None | Not missing | None | 0 | None | None | None |")
+        lines.append("| 0 | None | Not Missing | None | 0 | None | None | None |")
         return lines
 
     for index, entry in enumerate(missing_entries, start=1):
@@ -121,11 +173,6 @@ def build_missing_kb_evidence_table(
 def build_baseline_evidence_table(baseline: dict[str, Any]) -> list[str]:
     """Build the baseline evidence table."""
 
-    lines = [
-        "| Field | Value |",
-        "|---|---|",
-    ]
-
     rows = [
         ("OS Name", baseline.get("OsName")),
         ("OS Edition", baseline.get("OsEdition")),
@@ -133,7 +180,6 @@ def build_baseline_evidence_table(baseline: dict[str, Any]) -> list[str]:
         ("Build", baseline.get("Build")),
         ("Architecture", baseline.get("Architecture")),
         ("LCU MonthId", baseline.get("LcuMonthId")),
-        ("LCU Package Name", baseline.get("LcuPackageName")),
         ("LCU Install Month", baseline.get("LcuInstallMonth")),
         ("Patch Age Days", baseline.get("PatchAgeDays")),
         ("MSRC Latest MonthId", baseline.get("MsrcLatestMonthId")),
@@ -141,10 +187,7 @@ def build_baseline_evidence_table(baseline: dict[str, Any]) -> list[str]:
         ("Product Hint", baseline.get("ProductNameHint")),
     ]
 
-    for field, value in rows:
-        lines.append(f"| {field} | {format_value(value)} |")
-
-    return lines
+    return build_key_value_table(rows)
 
 
 # ------------------------------------------------------------
@@ -159,78 +202,56 @@ def build_scan_outcome_section(
 ) -> list[str]:
     """Build the scan outcome section."""
 
-    return [
+    lines = [
         "# Kolektria Scan Report",
+        "",
+        "Kolektria is a Windows patch-state collector that gathers update, KB, MSRC, and supersedence evidence from authorised hosts. The generated JSON and Markdown report are intended for downstream Remetria analysis.",
         "",
         "## Scan Outcome",
         "",
-        "This section summarises the scan result and the Windows update-state context used for MSRC correlation.",
-        "",
-        f"**Date Generated:** {generated_at}",
-        "",
-        f"**Operating System:** {format_value(baseline.get('OsName'))}",
-        "",
-        f"**Months Requested:** {format_list(months_requested)}",
-        "",
-        f"**Missing KBs:** {format_value(supersedence_summary.get('MissingKbs'), '0')}",
+        "High-level scan result and Windows advisory context.",
         "",
     ]
 
+    lines.extend(
+        build_key_value_table(
+            [
+                ("Date Generated", generated_at),
+                ("Operating System", baseline.get("OsName")),
+                ("Months Requested", format_list(months_requested)),
+                ("Missing KBs", supersedence_summary.get("MissingKbs")),
+            ]
+        )
+    )
+
+    lines.append("")
+
+    return lines
+
 
 def build_missing_update_state_section(
+    kb_entries: list[dict[str, Any]],
+    installed_kbs: list[str],
     missing_kbs: list[str],
-    supersedence_summary: dict[str, Any],
 ) -> list[str]:
     """Build the missing update state section."""
 
     lines = [
         "## Missing Update State",
         "",
-        "This section explains how Kolektria calculated the missing update state after applying supersedence evidence.",
+        "Summary of the KB states used to decide whether expected updates are present, superseded, or missing.",
         "",
     ]
 
     lines.extend(
-        build_metric_explanation_table(
-            [
-                (
-                    "Expected KBs",
-                    supersedence_summary.get("ExpectedKbs"),
-                    "KBs identified from MSRC advisory mappings for the requested Windows product and month range.",
-                ),
-                (
-                    "Installed KBs",
-                    supersedence_summary.get("InstalledKbs"),
-                    "KBs detected directly from the local Windows update inventory.",
-                ),
-                (
-                    "Installed Or Superseded KBs",
-                    supersedence_summary.get("InstalledOrSupersededKbs"),
-                    "KBs treated as present after expanding installed KBs through supersedence relationships.",
-                ),
-                (
-                    "Supersedence Relationships",
-                    supersedence_summary.get("RelationshipsResolved"),
-                    "Older KBs covered by installed superseding updates.",
-                ),
-                (
-                    "Missing KBs",
-                    supersedence_summary.get("MissingKbs"),
-                    "Expected KBs not found directly and not covered through supersedence.",
-                ),
-            ]
+        build_kb_state_table(
+            kb_entries=kb_entries,
+            installed_kbs=installed_kbs,
+            missing_kbs=missing_kbs,
         )
     )
 
-    lines.extend(
-        [
-            "",
-            "**Missing KB List:**",
-            "",
-            format_list(missing_kbs, "No missing KBs identified"),
-            "",
-        ]
-    )
+    lines.append("")
 
     return lines
 
@@ -244,7 +265,7 @@ def build_missing_kb_evidence_section(
     lines = [
         "## Missing KB Evidence",
         "",
-        "This section links each missing KB to the related MSRC month, CVE list, supersedence data, and update type.",
+        "Evidence chain for each missing KB, including affected CVEs and supersedence data.",
         "",
     ]
 
@@ -266,7 +287,7 @@ def build_baseline_evidence_section(baseline: dict[str, Any]) -> list[str]:
     lines = [
         "## Baseline Evidence",
         "",
-        "This section records the non-identifying Windows update-state evidence used to resolve the correct MSRC product context.",
+        "Non-identifying Windows update-state fields used to resolve the correct MSRC product context.",
         "",
     ]
 
@@ -286,7 +307,7 @@ def build_method_section() -> list[str]:
         "",
         "## Scope Notes",
         "",
-        "This report is generated from authorised local host evidence and is intended for downstream Remetria analysis.",
+        "The report is generated from authorised local host evidence and is intended for downstream Remetria analysis.",
         "",
         "Kolektria does not collect hostname, username, device name, serial number, IP address, MAC address, domain, local file paths, installed applications, or user activity. The scan is limited to Windows update-state and MSRC advisory-mapping evidence.",
         "",
@@ -301,6 +322,7 @@ def build_markdown_report(scan_result: dict[str, Any]) -> str:
     """Build a structured Markdown report from a Kolektria scan result."""
 
     baseline = scan_result.get("Baseline") or {}
+    installed_kbs = scan_result.get("InstalledKbs") or []
     months_requested = scan_result.get("MonthsRequested") or []
     kb_entries = scan_result.get("KbEntries") or []
     supersedence_summary = scan_result.get("SupersedenceSummary") or {}
@@ -321,8 +343,9 @@ def build_markdown_report(scan_result: dict[str, Any]) -> str:
 
     lines.extend(
         build_missing_update_state_section(
+            kb_entries=kb_entries,
+            installed_kbs=installed_kbs,
             missing_kbs=missing_kbs,
-            supersedence_summary=supersedence_summary,
         )
     )
 
