@@ -85,15 +85,15 @@ REM ------------------------------------------------------------
 REM MSRC MODULE BOOTSTRAP
 REM ------------------------------------------------------------
 
-echo [*] Checking MSRC PowerShell module
-
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "if (Get-Module -ListAvailable -Name MsrcSecurityUpdates) { exit 0 } else { exit 1 }" >nul 2>&1
 
-if %errorlevel% equ 0 (
-    echo     [+] MSRC PowerShell module found
-) else (
-    echo     [!] MSRC PowerShell module missing
-    echo     [*] Installing MSRC PowerShell module for current user
+if %errorlevel% neq 0 (
+    echo.
+    echo Dependency Bootstrap
+    echo --------------------
+    echo [*] Installing MSRC PowerShell module
+    echo     [i] Module: MsrcSecurityUpdates
+    echo     [i] Scope: CurrentUser
     echo.
 
     powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
@@ -112,9 +112,8 @@ if %errorlevel% equ 0 (
 
     echo.
     echo     [+] MSRC PowerShell module installed
+    echo.
 )
-
-echo.
 
 REM ------------------------------------------------------------
 REM REQUIRED FILE CHECKS
