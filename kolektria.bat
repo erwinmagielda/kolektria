@@ -16,19 +16,11 @@ REM ------------------------------------------------------------
 
 cd /d "%~dp0"
 
-set "APP_NAME=Kolektria"
 set "EXE_PATH=dist\kolektria.exe"
 set "PY_PATH=src\collector.py"
 set "POWERSHELL_DIR=src\powershell"
 set "RUNTIME_DIR=data\runtime"
 set "COLLECTED_DIR=data\collected"
-
-echo.
-echo ============================================================
-echo  Kolektria
-echo  Windows Patch-State Collector
-echo ============================================================
-echo.
 
 REM ------------------------------------------------------------
 REM WINDOWS CHECK
@@ -48,7 +40,7 @@ REM ------------------------------------------------------------
 net session >nul 2>&1
 if %errorlevel% neq 0 (
     echo [!] Administrator privileges are required.
-    echo [*] Requesting elevation...
+    echo [*] Requesting elevation.
     echo.
 
     powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
@@ -128,13 +120,10 @@ if not exist "%COLLECTED_DIR%" (
 )
 
 REM ------------------------------------------------------------
-REM COLLECTOR EXECUTION - EXE FIRST
+REM COLLECTOR EXECUTION
 REM ------------------------------------------------------------
 
 if exist "%EXE_PATH%" (
-    echo [*] Running Kolektria executable...
-    echo.
-
     "%EXE_PATH%"
 
     if %errorlevel% neq 0 (
@@ -146,27 +135,16 @@ if exist "%EXE_PATH%" (
     )
 
     echo.
-    echo [+] Scan completed successfully.
-    echo [+] Runtime JSON saved in: %RUNTIME_DIR%
-    echo [+] Archived copy saved in: %COLLECTED_DIR%
-    echo.
     pause
     exit /b 0
 )
 
-REM ------------------------------------------------------------
-REM SOURCE FALLBACK
-REM ------------------------------------------------------------
-
-echo [!] Kolektria executable was not found:
-echo     %EXE_PATH%
-echo.
-echo [*] Falling back to Python source mode...
-echo.
-
 where python.exe >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [X] Python was not found.
+    echo [X] Kolektria executable was not found:
+    echo     %EXE_PATH%
+    echo.
+    echo [X] Python fallback is unavailable because Python was not found.
     echo.
     echo Build the executable first using:
     echo build\build_exe.bat
@@ -176,8 +154,11 @@ if %errorlevel% neq 0 (
 )
 
 if not exist "%PY_PATH%" (
+    echo [X] Kolektria executable was not found:
+    echo     %EXE_PATH%
+    echo.
     echo [X] Python collector source was not found:
-    echo %PY_PATH%
+    echo     %PY_PATH%
     echo.
     pause
     exit /b 1
@@ -193,10 +174,6 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-echo.
-echo [+] Scan completed successfully.
-echo [+] Runtime JSON saved in: %RUNTIME_DIR%
-echo [+] Archived copy saved in: %COLLECTED_DIR%
 echo.
 pause
 exit /b 0
