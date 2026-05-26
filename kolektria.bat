@@ -31,7 +31,6 @@ REM ------------------------------------------------------------
 goto main
 
 :wait_to_close
-echo.
 echo Press any key to close
 pause >nul
 exit /b 0
