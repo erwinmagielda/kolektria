@@ -26,6 +26,12 @@ KOLEKTRIA_LOGO = r"""
 """
 
 
+def get_logo_width() -> int:
+    """Return the maximum printable logo line width."""
+
+    return max(len(line.rstrip()) for line in KOLEKTRIA_LOGO.splitlines() if line.strip())
+
+
 def print_banner() -> None:
     """Print the Kolektria startup banner."""
 
@@ -34,11 +40,20 @@ def print_banner() -> None:
     print()
     print("Windows Patch-State Collector")
     print()
+    print("=" * get_logo_width())
+    print()
 
 
 # ------------------------------------------------------------
 # PROMPTS
 # ------------------------------------------------------------
+
+def clear_pending_keys() -> None:
+    """Clear buffered key presses after a single-key prompt."""
+
+    while msvcrt.kbhit():
+        msvcrt.getwch()
+
 
 def confirm_scan() -> bool:
     """Ask the user whether to run a collection scan using one key press."""
@@ -46,6 +61,7 @@ def confirm_scan() -> bool:
     print("Run collection scan? [Y/n]: ", end="", flush=True)
 
     key = msvcrt.getwch().strip().lower()
+    clear_pending_keys()
 
     if key in ("", "\r", "\n", "y"):
         print("Y")
