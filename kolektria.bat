@@ -25,6 +25,25 @@ set "COLLECTED_DIR=data\collected"
 set "REPORTS_DIR=results\reports"
 
 REM ------------------------------------------------------------
+REM PAUSE HELPER
+REM ------------------------------------------------------------
+
+goto main
+
+:wait_to_close
+echo.
+echo Press any key to close
+pause >nul
+exit /b 0
+
+
+REM ------------------------------------------------------------
+REM MAIN WORKFLOW
+REM ------------------------------------------------------------
+
+:main
+
+REM ------------------------------------------------------------
 REM WINDOWS CHECK
 REM ------------------------------------------------------------
 
@@ -126,7 +145,7 @@ if not exist "%POWERSHELL_DIR%\adapter.ps1" (
 )
 
 REM ------------------------------------------------------------
-REM DATA DIRECTORIES
+REM OUTPUT DIRECTORIES
 REM ------------------------------------------------------------
 
 if not exist "%RUNTIME_DIR%" (
@@ -156,7 +175,7 @@ if exist "%EXE_PATH%" (
         exit /b 1
     )
 
-    exit /b 0
+    call :wait_to_close
 )
 
 where python.exe >nul 2>&1
@@ -194,4 +213,4 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-exit /b 0
+call :wait_to_close
