@@ -1,111 +1,44 @@
 """
-WinShield+ Collector.
+Kolektria collector.
 
-Portable Windows patch inventory collector for authorised hosts.
-
-This collector preserves the original WinShield+ runtime scan output contract
-so generated JSON files can be fed directly into the main WinShield+ pipeline.
+Portable Windows patch-state collector for authorised hosts.
 
 Runtime behaviour:
-    data/runtime   = latest scan workspace, cleared every run
-    data/collected = persistent scan archive, never cleared by collector
+    data/runtime   = latest scan workspace
+    data/collected = persistent scan archive
+
+Output purpose:
+    Produces structured JSON for downstream Remetria analysis.
 """
+
+from __future__ import annotations
 
 import argparse
 import json
 import shutil
-import subprocess
-import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-
-# ------------------------------------------------------------
-# SCRIPT NAMES
-# ------------------------------------------------------------
-
-BASELINE_SCRIPT = "winshield_baseline.ps1"
-INVENTORY_SCRIPT = "winshield_inventory.ps1"
-ADAPTER_SCRIPT = "winshield_adapter.ps1"
-
-
-# ------------------------------------------------------------
-# PATHS
-# ------------------------------------------------------------
-
-def get_root_dir() -> Path:
-    """
-    Return the project root directory.
-
-    Expected collector layout:
-
-        WINSHIELD_COLLECTOR/
-        ├── winshield_collector.bat
-        ├── src/
-        │   ├── core/
-        │   │   ├── winshield_collector.py
-        │   │   └── winshield_collector.exe
-        │   └── powershell/
-        │       ├── winshield_baseline.ps1
-        │       ├── winshield_inventory.ps1
-        │       └── winshield_adapter.ps1
-        └── data/
-            ├── runtime/
-            └── collected/
-
-    Source mode:
-        src/core/winshield_collector.py
-
-    EXE mode:
-        src/core/winshield_collector.exe
-    """
-
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parents[2]
-
-    return Path(__file__).resolve().parents[2]
-
-
-ROOT_DIR = get_root_dir()
-
-POWERSHELL_DIR = ROOT_DIR / "src" / "powershell"
-DATA_DIR = ROOT_DIR / "data"
-RUNTIME_DIR = DATA_DIR / "runtime"
-COLLECTED_DIR = DATA_DIR / "collected"
-
-
-# ------------------------------------------------------------
-# DISPLAY / PATH HELPERS
-# ------------------------------------------------------------
-
-def relative_path(path: Path) -> str:
-    """Return a repository-relative path for clean console output."""
-
-    try:
-        return str(path.relative_to(ROOT_DIR))
-    except ValueError:
-        return str(path)
-
-
-def ensure_required_files() -> None:
-    """Validate that all required PowerShell scripts exist."""
-
-    required_scripts = [
-        BASELINE_SCRIPT,
-        INVENTORY_SCRIPT,
-        ADAPTER_SCRIPT,
-    ]
-
-    missing_scripts = [
-        script_name
-        for script_name in required_scripts
-        if not (POWERSHELL_DIR / script_name).exists()
-    ]
-
-    if missing_scripts:
-        missing = ", ".join(missing_scripts)
-        raise RuntimeError(f"Missing PowerShell collector script(s): {missing}")
+from utils.console import (
+    print_banner,
+    print_error,
+    print_info,
+    print_step,
+    print_success,
+    print_warning,
+)
+from utils.paths import (
+    ADAPTER_SCRIPT_PATH,
+    BASELINE_SCRIPT_PATH,
+    COLLECTED_DIR,
+    INVENTORY_SCRIPT_PATH,
+    RUNTIME_DIR,
+    ensure_data_directories,
+    ensure_required_files,
+    relative_path,
+)
+from utils.runner import run_powershell_script
 
 
 # ------------------------------------------------------------
@@ -114,71 +47,36 @@ def ensure_required_files() -> None:
 
 def clear_runtime_directory() -> None:
     """
-    Clear existing runtime artefacts before starting a new scan.
+    Clear generated files from data/runtime.
 
-    data/runtime is treated as the latest scan workspace.
-    data/collected is a persistent archive and is never cleared here.
+    The .gitkeep placeholder is preserved so the folder remains tracked in Git.
     """
 
-    if RUNTIME_DIR.exists():
-        shutil.rmtree(RUNTIME_DIR)
+    ensure_data_directories()
 
-    RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
-    COLLECTED_DIR.mkdir(parents=True, exist_ok=True)
+    for item in RUNTIME_DIR.iterdir():
+        if item.name == ".gitkeep":
+            continue
 
+        if item.is_dir():
+            shutil.rmtree(item)
+            continue
 
-# ------------------------------------------------------------
-# POWERSHELL EXECUTION
-# ------------------------------------------------------------
-
-def run_powershell_script(
-    script_name: str,
-    extra_args: list[str] | None = None,
-) -> dict[str, Any]:
-    """Execute a PowerShell script and return parsed JSON output."""
-
-    script_path = POWERSHELL_DIR / script_name
-    args = extra_args or []
-
-    command = [
-        "powershell.exe",
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        str(script_path),
-        *args,
-    ]
-
-    result = subprocess.run(
-        command,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-    if result.returncode != 0:
-        error_output = result.stderr.strip() or result.stdout.strip()
-
-        if error_output:
-            raise RuntimeError(f"{script_name} failed: {error_output}")
-
-        raise RuntimeError(f"{script_name} failed with exit code {result.returncode}")
-
-    stdout = result.stdout.strip()
-
-    if not stdout:
-        raise RuntimeError(f"{script_name} returned no output")
-
-    try:
-        return json.loads(stdout)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(f"{script_name} returned invalid JSON") from exc
+        item.unlink()
 
 
 # ------------------------------------------------------------
 # MONTH RANGE HANDLING
 # ------------------------------------------------------------
+
+def parse_month_id(month_id: str) -> datetime:
+    """Parse an MSRC MonthId value into a UTC datetime."""
+
+    try:
+        return datetime.strptime(month_id, "%Y-%b").replace(day=1, tzinfo=UTC)
+    except ValueError as exc:
+        raise RuntimeError(f"Invalid MonthId value: {month_id}") from exc
+
 
 def build_month_ids_from_lcu(
     baseline: dict[str, Any],
@@ -187,23 +85,23 @@ def build_month_ids_from_lcu(
     """Build a MonthId range from installed LCU month to latest MSRC month."""
 
     if not baseline.get("IsAdmin"):
-        raise RuntimeError("Baseline collected without administrative privileges")
+        raise RuntimeError("Baseline was collected without administrative privileges")
 
     start_id = baseline.get("LcuMonthId")
+    end_id = baseline.get("MsrcLatestMonthId")
+
     if not start_id:
         raise RuntimeError("Baseline did not provide LcuMonthId")
 
-    end_id = baseline.get("MsrcLatestMonthId")
+    start_date = parse_month_id(str(start_id))
 
-    end_date = (
-        datetime.strptime(end_id, "%Y-%b").replace(day=1, tzinfo=UTC)
-        if end_id
-        else datetime.now(UTC).replace(day=1)
-    )
-
-    start_date = datetime.strptime(start_id, "%Y-%b").replace(day=1, tzinfo=UTC)
+    if end_id:
+        end_date = parse_month_id(str(end_id))
+    else:
+        end_date = datetime.now(UTC).replace(day=1)
 
     if start_date > end_date:
+        print_warning("LCU month is newer than latest MSRC month. Using latest MSRC month only.")
         start_date = end_date
 
     month_ids: list[str] = []
@@ -213,7 +111,11 @@ def build_month_ids_from_lcu(
     while True:
         current_date = datetime(year, month, 1, tzinfo=UTC)
 
-        if current_date > end_date or len(month_ids) >= max_months:
+        if current_date > end_date:
+            break
+
+        if len(month_ids) >= max_months:
+            print_warning(f"Month range reached max-months limit: {max_months}")
             break
 
         month_ids.append(current_date.strftime("%Y-%b"))
@@ -226,6 +128,9 @@ def build_month_ids_from_lcu(
         if month == 13:
             month = 1
             year += 1
+
+    if not month_ids:
+        raise RuntimeError("No MSRC MonthIds were generated from baseline context")
 
     return month_ids
 
@@ -266,6 +171,29 @@ def merge_kb_entries(
             for value in entry.get(field) or []:
                 if value and value not in target[field]:
                     target[field].append(value)
+
+
+def normalise_kb_entries(kb_entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Sort and normalise merged KB entries."""
+
+    normalised_entries: list[dict[str, Any]] = []
+
+    for entry in kb_entries:
+        months = sorted(set(entry.get("Months") or []))
+        cves = sorted(set(entry.get("Cves") or []))
+        supersedes = sorted(set(entry.get("Supersedes") or []))
+
+        normalised_entries.append(
+            {
+                "KB": entry["KB"],
+                "Months": months,
+                "Cves": cves,
+                "Supersedes": supersedes,
+                "UpdateType": "Superseding" if supersedes else "Standalone",
+            }
+        )
+
+    return sorted(normalised_entries, key=lambda item: item["KB"])
 
 
 # ------------------------------------------------------------
@@ -318,39 +246,47 @@ def compute_supersedence(
 # ------------------------------------------------------------
 
 def collect_scan(max_months: int = 48) -> dict[str, Any]:
-    """
-    Run the WinShield+ collector workflow.
+    """Run the Kolektria collection workflow and return scan JSON."""
 
-    Output schema intentionally matches the original scanner:
-
-        Baseline
-        InstalledKbs
-        MonthsRequested
-        MonthsWithEntries
-        KbEntries
-        MissingKbs
-    """
-
-    baseline = run_powershell_script(BASELINE_SCRIPT)
+    print_step("Collecting Windows baseline context")
+    baseline = run_powershell_script(BASELINE_SCRIPT_PATH)
 
     product_name_hint = baseline.get("ProductNameHint")
+
     if not product_name_hint:
         raise RuntimeError("ProductNameHint could not be resolved")
 
-    inventory = run_powershell_script(INVENTORY_SCRIPT)
+    print_success("Baseline context collected")
+    print_info(f"OS: {baseline.get('OsName', 'Unknown')}")
+    print_info(f"Build: {baseline.get('Build', 'Unknown')}")
+    print_info(f"Product hint: {product_name_hint}")
+
+    print_step("Collecting installed KB inventory")
+    inventory = run_powershell_script(INVENTORY_SCRIPT_PATH)
     installed_kbs = set(inventory.get("AllInstalledKbs") or [])
 
+    print_success(f"Installed KB inventory collected: {len(installed_kbs)} KBs")
+
+    print_step("Building MSRC MonthId range from LCU context")
     month_ids = build_month_ids_from_lcu(
         baseline=baseline,
         max_months=max_months,
     )
 
+    print_success(f"Month range built: {len(month_ids)} month(s)")
+    print_info(f"Months requested: {', '.join(month_ids)}")
+
     merged_entries: dict[str, dict[str, Any]] = {}
     months_with_entries: list[str] = []
 
+    print_step("Querying MSRC advisory data")
+
     for month_chunk in chunk_list(month_ids, 3):
+        chunk_text = ", ".join(month_chunk)
+        print_info(f"Processing MonthId chunk: {chunk_text}")
+
         msrc_data = run_powershell_script(
-            ADAPTER_SCRIPT,
+            ADAPTER_SCRIPT_PATH,
             extra_args=[
                 "-MonthIds",
                 ",".join(month_chunk),
@@ -360,20 +296,21 @@ def collect_scan(max_months: int = 48) -> dict[str, Any]:
         )
 
         entries = msrc_data.get("KbEntries") or []
+        adapter_months = msrc_data.get("MonthsWithProductRows") or []
 
         if entries:
-            months_with_entries.extend(month_chunk)
             merge_kb_entries(merged_entries, entries)
+            months_with_entries.extend(adapter_months or month_chunk)
 
-    kb_entries = list(merged_entries.values())
+        print_info(f"KB entries returned: {len(entries)}")
 
-    for entry in kb_entries:
-        entry["Months"] = sorted(set(entry.get("Months") or []))
-        entry["Cves"] = sorted(set(entry.get("Cves") or []))
-        entry["Supersedes"] = sorted(set(entry.get("Supersedes") or []))
-        entry["UpdateType"] = "Superseding" if entry["Supersedes"] else "Standalone"
+    kb_entries = normalise_kb_entries(list(merged_entries.values()))
 
-    logical_present_kbs, _superseded_by = compute_supersedence(
+    print_success(f"MSRC advisory mapping collected: {len(kb_entries)} KB entries")
+
+    print_step("Calculating supersedence and missing KBs")
+
+    logical_present_kbs, superseded_by = compute_supersedence(
         kb_entries=kb_entries,
         installed_kbs=installed_kbs,
     )
@@ -386,16 +323,19 @@ def collect_scan(max_months: int = 48) -> dict[str, Any]:
 
     missing_kbs = sorted(expected_kbs - logical_present_kbs)
 
-    scan_result = {
+    print_info(f"Expected KBs from advisory map: {len(expected_kbs)}")
+    print_info(f"Installed or superseded KBs: {len(logical_present_kbs)}")
+    print_info(f"Supersedence relationships resolved: {len(superseded_by)}")
+    print_success(f"Missing KBs identified: {len(missing_kbs)}")
+
+    return {
         "Baseline": baseline,
         "InstalledKbs": sorted(installed_kbs),
         "MonthsRequested": month_ids,
         "MonthsWithEntries": sorted(set(months_with_entries)),
-        "KbEntries": sorted(kb_entries, key=lambda item: item["KB"]),
+        "KbEntries": kb_entries,
         "MissingKbs": missing_kbs,
     }
-
-    return scan_result
 
 
 # ------------------------------------------------------------
@@ -403,12 +343,7 @@ def collect_scan(max_months: int = 48) -> dict[str, Any]:
 # ------------------------------------------------------------
 
 def export_runtime_scan(scan_result: dict[str, Any]) -> Path:
-    """
-    Write runtime scan output to data/runtime and copy it to data/collected.
-
-    data/runtime contains only the latest scan because it is cleared before
-    each run. data/collected keeps a persistent copy of every generated scan.
-    """
+    """Write runtime scan output and archive a persistent copy."""
 
     timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     runtime_scan_path = RUNTIME_DIR / f"scan_{timestamp}.json"
@@ -430,7 +365,7 @@ def parse_args() -> argparse.Namespace:
     """Parse command-line arguments."""
 
     parser = argparse.ArgumentParser(
-        description="Collect Windows patch inventory data and export WinShield+ runtime scan JSON.",
+        description="Collect Windows patch-state data and export Kolektria JSON.",
     )
 
     parser.add_argument(
@@ -438,12 +373,6 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=48,
         help="Maximum number of MSRC months to query from the LCU month onward.",
-    )
-
-    parser.add_argument(
-        "--quiet",
-        action="store_true",
-        help="Suppress success output. Errors are still printed to stderr.",
     )
 
     return parser.parse_args()
@@ -454,25 +383,35 @@ def parse_args() -> argparse.Namespace:
 # ------------------------------------------------------------
 
 def main() -> int:
-    """Run the WinShield+ collector workflow."""
+    """Run the Kolektria collector workflow."""
 
     args = parse_args()
 
     try:
+        print_banner()
+
+        print_step("Validating required collector files")
         ensure_required_files()
+        print_success("Required collector files found")
+
+        print_step("Preparing runtime workspace")
         clear_runtime_directory()
+        print_success(f"Runtime workspace ready: {relative_path(RUNTIME_DIR)}")
 
         scan_result = collect_scan(max_months=args.max_months)
-        runtime_scan_path = export_runtime_scan(scan_result)
 
-        if not args.quiet:
-            print(f"Runtime scan saved: {relative_path(runtime_scan_path)}")
-            print(f"Archived copy saved: {relative_path(COLLECTED_DIR / runtime_scan_path.name)}")
+        print_step("Writing scan JSON")
+        runtime_scan_path = export_runtime_scan(scan_result)
+        collected_scan_path = COLLECTED_DIR / runtime_scan_path.name
+
+        print_success(f"Runtime scan saved: {relative_path(runtime_scan_path)}")
+        print_success(f"Archived scan saved: {relative_path(collected_scan_path)}")
+        print_success("Kolektria collection completed")
 
         return 0
 
     except Exception as exc:
-        print(f"Collector failed: {exc}", file=sys.stderr)
+        print_error(f"Collector failed: {exc}")
         return 1
 
 
