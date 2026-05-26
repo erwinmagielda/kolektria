@@ -10,8 +10,9 @@ REM Runs the collector executable by default.
 REM Falls back to Python source mode when the executable is unavailable.
 REM
 REM Output:
-REM     data\runtime   - latest scan workspace
-REM     data\collected - persistent scan archive
+REM     data\runtime    - latest scan workspace
+REM     data\collected  - persistent scan archive
+REM     results\reports - generated Markdown reports
 REM ------------------------------------------------------------
 
 cd /d "%~dp0"
@@ -21,13 +22,14 @@ set "PY_PATH=src\collector.py"
 set "POWERSHELL_DIR=src\powershell"
 set "RUNTIME_DIR=data\runtime"
 set "COLLECTED_DIR=data\collected"
+set "REPORTS_DIR=results\reports"
 
 REM ------------------------------------------------------------
 REM WINDOWS CHECK
 REM ------------------------------------------------------------
 
 if /i not "%OS%"=="Windows_NT" (
-    echo [X] This collector must be run on Windows.
+    echo [X] This collector must be run on Windows
     echo.
     pause
     exit /b 1
@@ -39,8 +41,8 @@ REM ------------------------------------------------------------
 
 net session >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [!] Administrator privileges are required.
-    echo [*] Requesting elevation.
+    echo [!] Administrator privileges are required
+    echo [*] Requesting elevation
     echo.
 
     powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
@@ -54,7 +56,7 @@ REM ------------------------------------------------------------
 
 where powershell.exe >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [X] PowerShell was not found on this system.
+    echo [X] PowerShell was not found on this system
     echo.
     pause
     exit /b 1
@@ -70,7 +72,7 @@ if %errorlevel% neq 0 (
     echo [X] Required PowerShell module is missing:
     echo     MsrcSecurityUpdates
     echo.
-    echo Kolektria requires this module to query Microsoft Security Response Center data.
+    echo Kolektria requires this module to query Microsoft Security Response Center data
     echo.
     echo Install it manually with:
     echo powershell -NoProfile -Command "Install-Module MsrcSecurityUpdates -Scope CurrentUser"
@@ -119,6 +121,10 @@ if not exist "%COLLECTED_DIR%" (
     mkdir "%COLLECTED_DIR%" >nul 2>&1
 )
 
+if not exist "%REPORTS_DIR%" (
+    mkdir "%REPORTS_DIR%" >nul 2>&1
+)
+
 REM ------------------------------------------------------------
 REM COLLECTOR EXECUTION
 REM ------------------------------------------------------------
@@ -128,14 +134,12 @@ if exist "%EXE_PATH%" (
 
     if %errorlevel% neq 0 (
         echo.
-        echo [X] Kolektria failed.
+        echo [X] Kolektria failed
         echo.
         pause
         exit /b 1
     )
 
-    echo.
-    pause
     exit /b 0
 )
 
@@ -144,7 +148,7 @@ if %errorlevel% neq 0 (
     echo [X] Kolektria executable was not found:
     echo     %EXE_PATH%
     echo.
-    echo [X] Python fallback is unavailable because Python was not found.
+    echo [X] Python fallback is unavailable because Python was not found
     echo.
     echo Build the executable first using:
     echo build\build_exe.bat
@@ -168,12 +172,10 @@ python "%PY_PATH%"
 
 if %errorlevel% neq 0 (
     echo.
-    echo [X] Kolektria failed.
+    echo [X] Kolektria failed
     echo.
     pause
     exit /b 1
 )
 
-echo.
-pause
 exit /b 0
