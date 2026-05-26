@@ -211,14 +211,19 @@ function Get-MatchingItems {
 
 function Remove-MatchingItems {
     param(
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory = $false)]
+        [AllowNull()]
         [object[]]$Items
     )
 
+    if (-not $Items) {
+        return 0
+    }
+
     $removedCount = 0
 
-    foreach ($item in $Items) {
-        if (Test-Path $item.FullName) {
+    foreach ($item in @($Items)) {
+        if ($item -and (Test-Path $item.FullName)) {
             Remove-Item -Path $item.FullName -Recurse -Force
             $removedCount++
         }
