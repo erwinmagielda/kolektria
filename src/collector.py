@@ -6,9 +6,10 @@ Portable Windows patch-state collector for authorised hosts.
 Runtime behaviour:
     data/runtime   = latest scan workspace
     data/collected = persistent scan archive
+    results/reports = generated Markdown reports
 
 Output purpose:
-    Produces structured JSON for downstream Remetria analysis.
+    Produces structured JSON and Markdown evidence reports for downstream Remetria analysis.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from reporter import export_markdown_report
 from utils.console import (
     confirm_scan,
     print_banner,
@@ -35,8 +37,9 @@ from utils.paths import (
     BASELINE_SCRIPT_PATH,
     COLLECTED_DIR,
     INVENTORY_SCRIPT_PATH,
+    REPORTS_DIR,
     RUNTIME_DIR,
-    ensure_data_directories,
+    ensure_output_directories,
     ensure_required_files,
     relative_path,
 )
@@ -65,7 +68,7 @@ def clear_runtime_directory() -> None:
     The .gitkeep placeholder is preserved so the folder remains tracked in Git.
     """
 
-    ensure_data_directories()
+    ensure_output_directories()
 
     for item in RUNTIME_DIR.iterdir():
         if item.name == ".gitkeep":
@@ -473,6 +476,12 @@ def write_scan_output(scan_result: dict[str, Any]) -> None:
 
     print_success(f"Runtime scan saved: {relative_path(runtime_scan_path)}")
     print_success(f"Archived scan saved: {relative_path(collected_scan_path)}")
+
+    print_step("Writing Markdown report")
+    report_path = REPORTS_DIR / runtime_scan_path.with_suffix(".md").name
+    export_markdown_report(scan_result, report_path)
+
+    print_success(f"Markdown report saved: {relative_path(report_path)}")
     print_success("Kolektria collection completed")
 
 

@@ -6,6 +6,7 @@ Keeps scanner output consistent across the launcher and Python workflow.
 
 from __future__ import annotations
 
+import msvcrt
 import sys
 
 
@@ -40,12 +41,26 @@ def print_banner() -> None:
 # ------------------------------------------------------------
 
 def confirm_scan() -> bool:
-    """Ask the user whether to run a collection scan."""
+    """Ask the user whether to run a collection scan using one key press."""
 
-    response = input("Run collection scan? [Y/n]: ").strip().lower()
+    print("Run collection scan? [Y/n]: ", end="", flush=True)
+
+    key = msvcrt.getwch().strip().lower()
+
+    if key in ("", "\r", "\n", "y"):
+        print("Y")
+        print()
+        return True
+
+    if key == "n":
+        print("n")
+        print()
+        return False
+
+    print(key)
     print()
-
-    return response in ("", "y", "yes")
+    print_warning("Invalid selection, defaulting to scan")
+    return True
 
 
 # ------------------------------------------------------------

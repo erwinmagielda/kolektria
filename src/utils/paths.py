@@ -1,8 +1,8 @@
 """
 Kolektria path helpers.
 
-Centralises project paths used by the collector, PowerShell runner, and
-runtime export workflow.
+Centralises project paths used by the collector, PowerShell runner, reporter,
+and runtime export workflow.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ def get_root_dir() -> Path:
         src/collector.py
 
     Executable mode:
-        dist/kolektria.exe or packaged release executable.
+        dist/kolektria.exe
     """
 
     if getattr(sys, "frozen", False):
@@ -54,6 +54,9 @@ POWERSHELL_DIR = SRC_DIR / "powershell"
 DATA_DIR = ROOT_DIR / "data"
 RUNTIME_DIR = DATA_DIR / "runtime"
 COLLECTED_DIR = DATA_DIR / "collected"
+
+RESULTS_DIR = ROOT_DIR / "results"
+REPORTS_DIR = RESULTS_DIR / "reports"
 
 BASELINE_SCRIPT_PATH = POWERSHELL_DIR / BASELINE_SCRIPT
 INVENTORY_SCRIPT_PATH = POWERSHELL_DIR / INVENTORY_SCRIPT
@@ -105,8 +108,9 @@ def ensure_required_files() -> None:
 # RUNTIME DIRECTORIES
 # ------------------------------------------------------------
 
-def ensure_data_directories() -> None:
-    """Create required runtime data directories if they do not exist."""
+def ensure_output_directories() -> None:
+    """Create required output directories if they do not exist."""
 
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
     COLLECTED_DIR.mkdir(parents=True, exist_ok=True)
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
