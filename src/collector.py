@@ -372,11 +372,11 @@ def collect_msrc_entries(
 # SUPERSEDENCE ANALYSIS
 # ------------------------------------------------------------
 
-def calculate_missing_kbs(
+def calculate_supersedence_summary(
     kb_entries: list[dict[str, Any]],
     installed_kbs: set[str],
-) -> list[str]:
-    """Calculate missing KBs after supersedence expansion."""
+) -> tuple[list[str], dict[str, int]]:
+    """Calculate missing KBs and return a supersedence summary."""
 
     print_section("Supersedence Analysis")
 
@@ -400,12 +400,20 @@ def calculate_missing_kbs(
 
     missing_kbs = sorted(expected_kbs - logical_present_kbs)
 
-    print_result("Missing update state calculated")
-    print_detail(f"Expected KBs: {len(expected_kbs)}")
-    print_detail(f"Installed or superseded KBs: {len(logical_present_kbs)}")
-    print_detail(f"Missing KBs: {len(missing_kbs)}")
+    supersedence_summary = {
+        "ExpectedKbs": len(expected_kbs),
+        "InstalledKbs": len(installed_kbs),
+        "InstalledOrSupersededKbs": len(logical_present_kbs),
+        "RelationshipsResolved": len(superseded_by),
+        "MissingKbs": len(missing_kbs),
+    }
 
-    return missing_kbs
+    print_result("Missing update state calculated")
+    print_detail(f"Expected KBs: {supersedence_summary['ExpectedKbs']}")
+    print_detail(f"Installed or superseded KBs: {supersedence_summary['InstalledOrSupersededKbs']}")
+    print_detail(f"Missing KBs: {supersedence_summary['MissingKbs']}")
+
+    return missing_kbs, supersedence_summary
 
 
 # ------------------------------------------------------------
@@ -423,7 +431,7 @@ def collect_scan(max_months: int = 48) -> dict[str, Any]:
         max_months=max_months,
     )
 
-    missing_kbs = calculate_missing_kbs(
+    missing_kbs, supersedence_summary = calculate_supersedence_summary(
         kb_entries=kb_entries,
         installed_kbs=installed_kbs,
     )
@@ -434,6 +442,7 @@ def collect_scan(max_months: int = 48) -> dict[str, Any]:
         "MonthsRequested": month_ids,
         "MonthsWithEntries": months_with_entries,
         "KbEntries": kb_entries,
+        "SupersedenceSummary": supersedence_summary,
         "MissingKbs": missing_kbs,
     }
 

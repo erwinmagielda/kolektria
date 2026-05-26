@@ -143,18 +143,10 @@ def build_markdown_report(scan_result: dict[str, Any]) -> str:
     months_requested = scan_result.get("MonthsRequested") or []
     months_with_entries = scan_result.get("MonthsWithEntries") or []
     kb_entries = scan_result.get("KbEntries") or []
+    supersedence_summary = scan_result.get("SupersedenceSummary") or {}
     missing_kbs = scan_result.get("MissingKbs") or []
 
     generated_at = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
-
-    logical_present_count = len(installed_kbs)
-    expected_kb_count = len(
-        {
-            entry.get("KB")
-            for entry in kb_entries
-            if entry.get("KB")
-        }
-    )
 
     lines = [
         "# Kolektria Scan Report",
@@ -188,9 +180,11 @@ def build_markdown_report(scan_result: dict[str, Any]) -> str:
     lines.extend(
         build_metric_table(
             [
-                ("Expected KBs", expected_kb_count),
-                ("Installed KBs", len(installed_kbs)),
-                ("Missing KBs", len(missing_kbs)),
+                ("Expected KBs", supersedence_summary.get("ExpectedKbs")),
+                ("Installed KBs", supersedence_summary.get("InstalledKbs")),
+                ("Installed or superseded KBs", supersedence_summary.get("InstalledOrSupersededKbs")),
+                ("Supersedence relationships", supersedence_summary.get("RelationshipsResolved")),
+                ("Missing KBs", supersedence_summary.get("MissingKbs")),
             ]
         )
     )
