@@ -523,6 +523,7 @@ def main() -> int:
 
         if not confirm_scan():
             print_info("Collection cancelled")
+            print()
             return 0
 
         prepare_environment()
@@ -531,16 +532,19 @@ def main() -> int:
 
         print()
         print_success("Kolektria collection completed")
+        print()
 
         return 0
 
     except KeyboardInterrupt:
         print()
         print_info("Collection cancelled")
+        print()
         return 0
 
     except Exception as exc:
         print_error(f"Collector failed: {exc}")
+        print()
         return 1
 
 
