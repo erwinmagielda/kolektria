@@ -476,7 +476,7 @@ def write_scan_output(scan_result: dict[str, Any]) -> None:
     export_markdown_report(scan_result, report_path)
 
     print_result("Markdown report written")
-    print_detail(f"Path: {relative_path(report_path)}")
+    print_detail(f"Markdown report: {relative_path(report_path)}")
 
 
 # ------------------------------------------------------------

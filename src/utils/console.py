@@ -49,16 +49,13 @@ def confirm_scan() -> bool:
 
     if key in ("", "\r", "\n", "y"):
         print("Y")
-        print()
         return True
 
     if key == "n":
         print("n")
-        print()
         return False
 
     print(key)
-    print()
     print_warning("Invalid selection, defaulting to scan")
     return True
 
