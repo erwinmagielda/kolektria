@@ -3,9 +3,9 @@
     Clean Kolektria generated artefacts.
 
 .DESCRIPTION
-    Removes generated runtime, report, build, executable, and Python cache artefacts.
+    Removes generated runtime, report, build, and Python cache artefacts.
 
-    The collected scan archive is intentionally preserved.
+    The collected scan archive and executable output are intentionally preserved.
 
 .OUTPUTS
     Console status output.
@@ -102,20 +102,6 @@ function Get-RelativePath {
 }
 
 
-function Format-ItemCount {
-    param(
-        [Parameter(Mandatory = $true)]
-        [int]$Count
-    )
-
-    if ($Count -eq 1) {
-        return "1"
-    }
-
-    return "$Count"
-}
-
-
 # ------------------------------------------------------------
 # CLEAN HELPERS
 # ------------------------------------------------------------
@@ -160,11 +146,16 @@ function Clear-DirectoryContents {
             Where-Object { $Preserve -notcontains $_.Name }
     )
 
+    $removedCount = 0
+
     foreach ($item in $items) {
-        Remove-Item -Path $item.FullName -Recurse -Force
+        if (Test-Path $item.FullName) {
+            Remove-Item -Path $item.FullName -Recurse -Force
+            $removedCount++
+        }
     }
 
-    return $items.Count
+    return $removedCount
 }
 
 
@@ -224,11 +215,16 @@ function Remove-MatchingItems {
         [object[]]$Items
     )
 
+    $removedCount = 0
+
     foreach ($item in $Items) {
-        Remove-Item -Path $item.FullName -Recurse -Force
+        if (Test-Path $item.FullName) {
+            Remove-Item -Path $item.FullName -Recurse -Force
+            $removedCount++
+        }
     }
 
-    return $Items.Count
+    return $removedCount
 }
 
 
@@ -238,9 +234,9 @@ function Remove-MatchingItems {
 
 $RuntimePath = "$ProjectRoot\data\runtime"
 $ReportsPath = "$ProjectRoot\results\reports"
-$DistPath = "$ProjectRoot\dist"
 $PyInstallerPath = "$ProjectRoot\build\pyinstaller"
 $CollectedPath = "$ProjectRoot\data\collected"
+$DistPath = "$ProjectRoot\dist"
 
 $CacheDirectories = Get-MatchingItems -Mode "Directory" -Pattern "__pycache__"
 $PycFiles = Get-MatchingItems -Mode "File" -Pattern "*.pyc"
@@ -254,7 +250,6 @@ $BytecodeFiles = @($PycFiles + $PyoFiles)
 
 $RuntimeCount = Get-DirectoryItemCount -Path $RuntimePath
 $ReportsCount = Get-DirectoryItemCount -Path $ReportsPath
-$DistCount = Get-DirectoryItemCount -Path $DistPath
 $PyInstallerCount = Get-DirectoryRemovalCount -Path $PyInstallerPath
 $CacheCount = $CacheDirectories.Count
 $BytecodeCount = $BytecodeFiles.Count
@@ -262,18 +257,17 @@ $BytecodeCount = $BytecodeFiles.Count
 $TotalCount = (
     $RuntimeCount +
     $ReportsCount +
-    $DistCount +
     $PyInstallerCount +
     $CacheCount +
     $BytecodeCount
 )
 
 Write-Section "Clean Generated Artefacts"
+
 Write-Step "Reviewing generated artefact targets"
 Write-Result "Cleanup plan prepared"
 Write-Detail "Runtime workspace: $(Get-RelativePath -Path $RuntimePath)"
 Write-Detail "Generated reports: $(Get-RelativePath -Path $ReportsPath)"
-Write-Detail "Executable output: $(Get-RelativePath -Path $DistPath)"
 Write-Detail "PyInstaller workspace: $(Get-RelativePath -Path $PyInstallerPath)"
 Write-Detail "Python cache directories: __pycache__"
 Write-Detail "Python bytecode files: *.pyc, *.pyo"
@@ -282,17 +276,17 @@ Write-Host
 Write-Step "Checking preserved locations"
 Write-Result "Archive preservation confirmed"
 Write-Detail "Collected archive: $(Get-RelativePath -Path $CollectedPath)"
+Write-Detail "Executable output: $(Get-RelativePath -Path $DistPath)"
 
 Write-Host
 Write-Step "Counting selected artefacts"
 Write-Result "Artefact count calculated"
-Write-Detail "Runtime workspace items: $(Format-ItemCount -Count $RuntimeCount)"
-Write-Detail "Generated report items: $(Format-ItemCount -Count $ReportsCount)"
-Write-Detail "Executable output items: $(Format-ItemCount -Count $DistCount)"
-Write-Detail "PyInstaller workspace items: $(Format-ItemCount -Count $PyInstallerCount)"
-Write-Detail "Python cache directories: $(Format-ItemCount -Count $CacheCount)"
-Write-Detail "Python bytecode files: $(Format-ItemCount -Count $BytecodeCount)"
-Write-Detail "Total artefacts selected: $(Format-ItemCount -Count $TotalCount)"
+Write-Detail "Runtime workspace items: $RuntimeCount"
+Write-Detail "Generated report items: $ReportsCount"
+Write-Detail "PyInstaller workspace items: $PyInstallerCount"
+Write-Detail "Python cache directories: $CacheCount"
+Write-Detail "Python bytecode files: $BytecodeCount"
+Write-Detail "Total artefacts selected: $TotalCount"
 
 Write-Host
 $response = Read-Host "Proceed with cleanup? [y/N]"
@@ -310,10 +304,9 @@ if ($response -notin @("y", "Y", "yes", "YES")) {
 
 $RuntimeRemoved = Clear-DirectoryContents -Path $RuntimePath
 $ReportsRemoved = Clear-DirectoryContents -Path $ReportsPath
-$DistRemoved = Clear-DirectoryContents -Path $DistPath
 $PyInstallerRemoved = Remove-DirectoryIfExists -Path $PyInstallerPath
-$CacheRemoved = Remove-MatchingItems -Items $CacheDirectories
 $BytecodeRemoved = Remove-MatchingItems -Items $BytecodeFiles
+$CacheRemoved = Remove-MatchingItems -Items $CacheDirectories
 
 
 # ------------------------------------------------------------
@@ -321,36 +314,33 @@ $BytecodeRemoved = Remove-MatchingItems -Items $BytecodeFiles
 # ------------------------------------------------------------
 
 Write-Section "Cleanup Results"
+
 Write-Step "Cleaning runtime workspace"
 Write-Result "Runtime workspace cleaned"
-Write-Detail "Items removed: $(Format-ItemCount -Count $RuntimeRemoved)"
+Write-Detail "Items removed: $RuntimeRemoved"
 
 Write-Host
 Write-Step "Cleaning generated reports"
 Write-Result "Generated reports cleaned"
-Write-Detail "Items removed: $(Format-ItemCount -Count $ReportsRemoved)"
-
-Write-Host
-Write-Step "Cleaning executable output"
-Write-Result "Executable output cleaned"
-Write-Detail "Items removed: $(Format-ItemCount -Count $DistRemoved)"
+Write-Detail "Items removed: $ReportsRemoved"
 
 Write-Host
 Write-Step "Cleaning PyInstaller workspace"
 Write-Result "PyInstaller workspace cleaned"
-Write-Detail "Items removed: $(Format-ItemCount -Count $PyInstallerRemoved)"
-
-Write-Host
-Write-Step "Cleaning Python cache directories"
-Write-Result "Python cache directories cleaned"
-Write-Detail "Items removed: $(Format-ItemCount -Count $CacheRemoved)"
+Write-Detail "Items removed: $PyInstallerRemoved"
 
 Write-Host
 Write-Step "Cleaning Python bytecode files"
 Write-Result "Python bytecode files cleaned"
-Write-Detail "Items removed: $(Format-ItemCount -Count $BytecodeRemoved)"
+Write-Detail "Items removed: $BytecodeRemoved"
+
+Write-Host
+Write-Step "Cleaning Python cache directories"
+Write-Result "Python cache directories cleaned"
+Write-Detail "Items removed: $CacheRemoved"
 
 Write-Host
 Write-Success "Generated artefacts cleaned"
 Write-Info "Collected scan archive preserved: $(Get-RelativePath -Path $CollectedPath)"
+Write-Info "Executable output preserved: $(Get-RelativePath -Path $DistPath)"
 Write-Host
