@@ -299,6 +299,7 @@ $response = Read-Host "Proceed with cleanup? [y/N]"
 if ($response -notin @("y", "Y", "yes", "YES")) {
     Write-Host
     Write-Info "Cleanup cancelled"
+    Write-Host
     exit 0
 }
 
