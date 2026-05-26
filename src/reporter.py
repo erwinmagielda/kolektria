@@ -1,7 +1,7 @@
 """
 Kolektria Markdown reporter.
 
-Builds a human-readable Markdown report from Kolektria scan JSON.
+Builds a human-readable Markdown evidence report from Kolektria scan JSON.
 """
 
 from __future__ import annotations
@@ -31,6 +31,21 @@ def format_value(value: Any, empty_value: str = "Unknown") -> str:
         return empty_value
 
     return str(value)
+
+
+def get_missing_entries(
+    kb_entries: list[dict[str, Any]],
+    missing_kbs: list[str],
+) -> list[dict[str, Any]]:
+    """Return KB advisory entries matching missing KBs."""
+
+    missing_set = set(missing_kbs)
+
+    return [
+        entry
+        for entry in kb_entries
+        if entry.get("KB") in missing_set
+    ]
 
 
 # ------------------------------------------------------------
@@ -69,32 +84,33 @@ def build_missing_kb_table(
     kb_entries: list[dict[str, Any]],
     missing_kbs: list[str],
 ) -> list[str]:
-    """Build a Markdown table for missing KB entries."""
-
-    missing_set = set(missing_kbs)
+    """Build a Markdown table for missing KB evidence and related CVEs."""
 
     lines = [
-        "| KB | Months | CVEs | Supersedes |",
-        "|---|---|---:|---|",
+        "| KB | Months | CVE count | CVEs | Supersedes |",
+        "|---|---|---:|---|---|",
     ]
 
-    missing_entries = [
-        entry
-        for entry in kb_entries
-        if entry.get("KB") in missing_set
-    ]
+    missing_entries = get_missing_entries(
+        kb_entries=kb_entries,
+        missing_kbs=missing_kbs,
+    )
 
     if not missing_entries:
-        lines.append("| None | None | 0 | None |")
+        lines.append("| None | None | 0 | None | None |")
         return lines
 
     for entry in missing_entries:
         kb_id = format_value(entry.get("KB"))
         months = format_list(entry.get("Months") or [])
-        cve_count = len(entry.get("Cves") or [])
+        cves = entry.get("Cves") or []
+        cve_count = len(cves)
+        cve_list = format_list(cves)
         supersedes = format_list(entry.get("Supersedes") or [])
 
-        lines.append(f"| {kb_id} | {months} | {cve_count} | {supersedes} |")
+        lines.append(
+            f"| {kb_id} | {months} | {cve_count} | {cve_list} | {supersedes} |"
+        )
 
     return lines
 
@@ -103,12 +119,12 @@ def build_advisory_table(
     kb_entries: list[dict[str, Any]],
     missing_kbs: list[str],
 ) -> list[str]:
-    """Build a Markdown table for KB advisory entries."""
+    """Build a compact Markdown table for all KB advisory entries."""
 
     missing_set = set(missing_kbs)
 
     lines = [
-        "| KB | Status | Months | CVEs | Supersedes | Update type |",
+        "| KB | Status | Months | CVE count | Supersedes | Update type |",
         "|---|---|---|---:|---|---|",
     ]
 
@@ -132,50 +148,49 @@ def build_advisory_table(
 
 
 # ------------------------------------------------------------
-# REPORT BUILDING
+# REPORT SECTIONS
 # ------------------------------------------------------------
 
-def build_markdown_report(scan_result: dict[str, Any]) -> str:
-    """Build a structured Markdown report from a Kolektria scan result."""
+def build_scan_outcome_section(
+    generated_at: str,
+    baseline: dict[str, Any],
+    months_requested: list[str],
+    kb_entries: list[dict[str, Any]],
+    supersedence_summary: dict[str, Any],
+) -> list[str]:
+    """Build the scan outcome section."""
 
-    baseline = scan_result.get("Baseline") or {}
-    installed_kbs = scan_result.get("InstalledKbs") or []
-    months_requested = scan_result.get("MonthsRequested") or []
-    months_with_entries = scan_result.get("MonthsWithEntries") or []
-    kb_entries = scan_result.get("KbEntries") or []
-    supersedence_summary = scan_result.get("SupersedenceSummary") or {}
-    missing_kbs = scan_result.get("MissingKbs") or []
-
-    generated_at = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
-
-    lines = [
+    return [
         "# Kolektria Scan Report",
         "",
-        "## Scan Summary",
+        "## Scan Outcome",
         "",
-    ]
-
-    lines.extend(
-        build_key_value_table(
+        *build_key_value_table(
             [
                 ("Generated", generated_at),
                 ("Product hint", baseline.get("ProductNameHint")),
-                ("Installed KBs", len(installed_kbs)),
-                ("MSRC months requested", len(months_requested)),
-                ("MSRC months with entries", len(months_with_entries)),
+                ("LCU MonthId", baseline.get("LcuMonthId")),
+                ("MSRC latest MonthId", baseline.get("MsrcLatestMonthId")),
+                ("Months requested", format_list(months_requested)),
                 ("Advisory KB entries", len(kb_entries)),
-                ("Missing KBs", len(missing_kbs)),
+                ("Missing KBs", supersedence_summary.get("MissingKbs")),
             ]
-        )
-    )
+        ),
+    ]
 
-    lines.extend(
-        [
-            "",
-            "## Missing Update State",
-            "",
-        ]
-    )
+
+def build_missing_state_section(
+    kb_entries: list[dict[str, Any]],
+    missing_kbs: list[str],
+    supersedence_summary: dict[str, Any],
+) -> list[str]:
+    """Build missing update state and missing KB evidence sections."""
+
+    lines = [
+        "",
+        "## Missing Update State",
+        "",
+    ]
 
     lines.extend(
         build_metric_table(
@@ -192,30 +207,41 @@ def build_markdown_report(scan_result: dict[str, Any]) -> str:
     lines.extend(
         [
             "",
-            "## Missing KBs",
+            "## Missing KB Evidence",
             "",
         ]
     )
 
     lines.extend(build_missing_kb_table(kb_entries, missing_kbs))
 
-    lines.extend(
-        [
-            "",
-            "## Advisory Map",
-            "",
-        ]
-    )
+    return lines
+
+
+def build_advisory_evidence_section(
+    kb_entries: list[dict[str, Any]],
+    missing_kbs: list[str],
+) -> list[str]:
+    """Build the advisory evidence section."""
+
+    lines = [
+        "",
+        "## Advisory Evidence",
+        "",
+    ]
 
     lines.extend(build_advisory_table(kb_entries, missing_kbs))
 
-    lines.extend(
-        [
-            "",
-            "## Host Baseline",
-            "",
-        ]
-    )
+    return lines
+
+
+def build_baseline_evidence_section(baseline: dict[str, Any]) -> list[str]:
+    """Build the baseline evidence section."""
+
+    lines = [
+        "",
+        "## Baseline Evidence",
+        "",
+    ]
 
     lines.extend(
         build_key_value_table(
@@ -236,21 +262,71 @@ def build_markdown_report(scan_result: dict[str, Any]) -> str:
         )
     )
 
+    return lines
+
+
+def build_method_section() -> list[str]:
+    """Build the report method section."""
+
+    return [
+        "",
+        "## Method",
+        "",
+        "Kolektria collects Windows update-state evidence, installed KB inventory, MSRC advisory mappings, and supersedence relationships. Missing KBs are calculated by comparing expected advisory KBs against installed KBs after expanding logical presence through supersedence evidence.",
+        "",
+        "## Scope Notes",
+        "",
+        "This report is generated from authorised local host evidence and is intended for downstream Remetria analysis.",
+        "",
+        "Kolektria does not collect hostname, username, device name, serial number, IP address, MAC address, domain, local file paths, installed applications, or user activity. The scan is limited to Windows update-state and MSRC advisory-mapping evidence.",
+        "",
+    ]
+
+
+# ------------------------------------------------------------
+# REPORT BUILDING
+# ------------------------------------------------------------
+
+def build_markdown_report(scan_result: dict[str, Any]) -> str:
+    """Build a structured Markdown report from a Kolektria scan result."""
+
+    baseline = scan_result.get("Baseline") or {}
+    months_requested = scan_result.get("MonthsRequested") or []
+    kb_entries = scan_result.get("KbEntries") or []
+    supersedence_summary = scan_result.get("SupersedenceSummary") or {}
+    missing_kbs = scan_result.get("MissingKbs") or []
+
+    generated_at = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    lines: list[str] = []
+
     lines.extend(
-        [
-            "",
-            "## Collection Method",
-            "",
-            "Kolektria collects Windows update-state evidence, installed KB inventory, MSRC advisory mappings, and supersedence relationships. Missing KBs are calculated by comparing expected advisory KBs against installed KBs after expanding logical presence through supersedence evidence.",
-            "",
-            "## Scope Notes",
-            "",
-            "This report is generated from authorised local host evidence and is intended for downstream Remetria analysis.",
-            "",
-            "Kolektria does not collect hostname, username, device name, serial number, IP address, MAC address, domain, local file paths, installed applications, or user activity. The scan is limited to Windows update-state and MSRC advisory-mapping evidence.",
-            "",
-        ]
+        build_scan_outcome_section(
+            generated_at=generated_at,
+            baseline=baseline,
+            months_requested=months_requested,
+            kb_entries=kb_entries,
+            supersedence_summary=supersedence_summary,
+        )
     )
+
+    lines.extend(
+        build_missing_state_section(
+            kb_entries=kb_entries,
+            missing_kbs=missing_kbs,
+            supersedence_summary=supersedence_summary,
+        )
+    )
+
+    lines.extend(
+        build_advisory_evidence_section(
+            kb_entries=kb_entries,
+            missing_kbs=missing_kbs,
+        )
+    )
+
+    lines.extend(build_baseline_evidence_section(baseline=baseline))
+    lines.extend(build_method_section())
 
     return "\n".join(lines)
 
