@@ -25,8 +25,10 @@ from reporter import export_markdown_report
 from utils.console import (
     confirm_scan,
     print_banner,
+    print_detail,
     print_error,
     print_info,
+    print_result,
     print_section,
     print_step,
     print_success,
@@ -37,6 +39,7 @@ from utils.paths import (
     BASELINE_SCRIPT_PATH,
     COLLECTED_DIR,
     INVENTORY_SCRIPT_PATH,
+    POWERSHELL_DIR,
     REPORTS_DIR,
     RUNTIME_DIR,
     ensure_output_directories,
@@ -49,13 +52,6 @@ from utils.runner import run_powershell_script
 # ------------------------------------------------------------
 # DISPLAY HELPERS
 # ------------------------------------------------------------
-
-def pluralise(count: int, singular: str, plural: str | None = None) -> str:
-    """Return a count with a readable singular or plural label."""
-
-    label = singular if count == 1 else (plural or f"{singular}s")
-    return f"{count} {label}"
-
 
 def format_months(month_ids: list[str]) -> str:
     """Return a readable MonthId list."""
@@ -275,11 +271,16 @@ def prepare_environment() -> None:
 
     print_section("Environment Preparation")
 
+    print_step("Validating collector files")
     ensure_required_files()
-    print_success("Collector files found")
+    print_result("Collector files found")
+    print_detail(f"Path: {relative_path(POWERSHELL_DIR)}")
 
+    print()
+    print_step("Preparing runtime workspace")
     clear_runtime_directory()
-    print_success(f"Runtime workspace ready: {relative_path(RUNTIME_DIR)}")
+    print_result("Runtime workspace prepared")
+    print_detail(f"Path: {relative_path(RUNTIME_DIR)}")
 
 
 # ------------------------------------------------------------
@@ -290,20 +291,25 @@ def collect_host_evidence() -> tuple[dict[str, Any], set[str], str]:
     """Collect Windows baseline context and installed KB inventory."""
 
     print_section("Host Evidence")
-    print_step("Collecting Windows baseline and installed KB inventory")
 
+    print_step("Collecting Windows baseline context")
     baseline = run_powershell_script(BASELINE_SCRIPT_PATH)
+
     product_name_hint = baseline.get("ProductNameHint")
 
     if not product_name_hint:
         raise RuntimeError("ProductNameHint could not be resolved")
 
+    print_result("Windows baseline collected")
+    print_detail(f"Product hint: {product_name_hint}")
+
+    print()
+    print_step("Collecting installed KB inventory")
     inventory = run_powershell_script(INVENTORY_SCRIPT_PATH)
     installed_kbs = set(inventory.get("AllInstalledKbs") or [])
 
-    print_success("Host evidence collected")
-    print_info(f"Product hint: {product_name_hint}")
-    print_info(f"Installed KBs: {len(installed_kbs)}")
+    print_result("Installed KB inventory collected")
+    print_detail(f"Installed KBs: {len(installed_kbs)}")
 
     return baseline, installed_kbs, str(product_name_hint)
 
@@ -320,14 +326,18 @@ def collect_msrc_entries(
     """Collect and merge MSRC advisory KB entries."""
 
     print_section("MSRC Correlation")
-    print_step("Querying MSRC advisory data")
 
+    print_step("Building MSRC MonthId range")
     month_ids = build_month_ids_from_lcu(
         baseline=baseline,
         max_months=max_months,
     )
 
-    print_info(f"Months requested: {format_months(month_ids)}")
+    print_result("MSRC MonthId range built")
+    print_detail(f"Months requested: {format_months(month_ids)}")
+
+    print()
+    print_step("Querying MSRC advisory data")
 
     merged_entries: dict[str, dict[str, Any]] = {}
     months_with_entries: list[str] = []
@@ -352,9 +362,8 @@ def collect_msrc_entries(
 
     kb_entries = normalise_kb_entries(list(merged_entries.values()))
 
-    print_success(
-        f"Advisory mapping collected: {pluralise(len(kb_entries), 'KB entry', 'KB entries')}"
-    )
+    print_result("MSRC advisory data collected")
+    print_detail(f"KB entries collected: {len(kb_entries)}")
 
     return month_ids, sorted(set(months_with_entries)), kb_entries
 
@@ -370,12 +379,18 @@ def calculate_missing_kbs(
     """Calculate missing KBs after supersedence expansion."""
 
     print_section("Supersedence Analysis")
-    print_step("Calculating missing KBs")
 
+    print_step("Calculating supersedence relationships")
     logical_present_kbs, superseded_by = compute_supersedence(
         kb_entries=kb_entries,
         installed_kbs=installed_kbs,
     )
+
+    print_result("Supersedence relationships calculated")
+    print_detail(f"Relationships resolved: {len(superseded_by)}")
+
+    print()
+    print_step("Calculating missing update state")
 
     expected_kbs = {
         entry["KB"]
@@ -385,10 +400,10 @@ def calculate_missing_kbs(
 
     missing_kbs = sorted(expected_kbs - logical_present_kbs)
 
-    print_info(f"Expected KBs: {len(expected_kbs)}")
-    print_info(f"Installed or superseded KBs: {len(logical_present_kbs)}")
-    print_info(f"Supersedence relationships: {len(superseded_by)}")
-    print_success(f"Missing KBs identified: {pluralise(len(missing_kbs), 'KB')}")
+    print_result("Missing update state calculated")
+    print_detail(f"Expected KBs: {len(expected_kbs)}")
+    print_detail(f"Installed or superseded KBs: {len(logical_present_kbs)}")
+    print_detail(f"Missing KBs: {len(missing_kbs)}")
 
     return missing_kbs
 
@@ -446,17 +461,22 @@ def write_scan_output(scan_result: dict[str, Any]) -> None:
     """Write scan output and print generated artefact paths."""
 
     print_section("Runtime Export")
-    print_step("Writing JSON and Markdown outputs")
 
+    print_step("Writing scan JSON")
     runtime_scan_path = export_runtime_scan(scan_result)
     collected_scan_path = COLLECTED_DIR / runtime_scan_path.name
-    report_path = REPORTS_DIR / runtime_scan_path.with_suffix(".md").name
 
+    print_result("Scan JSON written")
+    print_detail(f"Runtime JSON: {relative_path(runtime_scan_path)}")
+    print_detail(f"Archived JSON: {relative_path(collected_scan_path)}")
+
+    print()
+    print_step("Writing Markdown report")
+    report_path = REPORTS_DIR / runtime_scan_path.with_suffix(".md").name
     export_markdown_report(scan_result, report_path)
 
-    print_success(f"Runtime JSON: {relative_path(runtime_scan_path)}")
-    print_success(f"Archived JSON: {relative_path(collected_scan_path)}")
-    print_success(f"Markdown report: {relative_path(report_path)}")
+    print_result("Markdown report written")
+    print_detail(f"Path: {relative_path(report_path)}")
 
 
 # ------------------------------------------------------------

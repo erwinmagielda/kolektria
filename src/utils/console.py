@@ -80,21 +80,21 @@ def print_section(title: str) -> None:
 # ------------------------------------------------------------
 
 def print_step(message: str) -> None:
-    """Print an active workflow step."""
+    """Print a primary workflow action."""
 
     print(f"[*] {message}")
 
 
-def print_success(message: str) -> None:
-    """Print a successful workflow step."""
+def print_result(message: str) -> None:
+    """Print an indented workflow result."""
 
-    print(f"[+] {message}")
+    print(f"    [+] {message}")
 
 
-def print_info(message: str) -> None:
-    """Print an informational message."""
+def print_detail(message: str) -> None:
+    """Print an indented workflow detail."""
 
-    print(f"[i] {message}")
+    print(f"    [i] {message}")
 
 
 def print_warning(message: str) -> None:
@@ -107,3 +107,15 @@ def print_error(message: str) -> None:
     """Print an error message to stderr."""
 
     print(f"[X] {message}", file=sys.stderr)
+
+
+def print_info(message: str) -> None:
+    """Print a standalone informational message."""
+
+    print(f"[i] {message}")
+
+
+def print_success(message: str) -> None:
+    """Print a standalone success message."""
+
+    print(f"[+] {message}")
