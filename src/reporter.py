@@ -37,7 +37,69 @@ def format_value(value: Any, empty_value: str = "Unknown") -> str:
 # TABLE BUILDING
 # ------------------------------------------------------------
 
-def build_kb_table(
+def build_key_value_table(rows: list[tuple[str, Any]]) -> list[str]:
+    """Build a two-column Markdown key-value table."""
+
+    lines = [
+        "| Field | Value |",
+        "|---|---|",
+    ]
+
+    for field, value in rows:
+        lines.append(f"| {field} | {format_value(value)} |")
+
+    return lines
+
+
+def build_metric_table(rows: list[tuple[str, Any]]) -> list[str]:
+    """Build a two-column Markdown metric table."""
+
+    lines = [
+        "| Metric | Value |",
+        "|---|---:|",
+    ]
+
+    for metric, value in rows:
+        lines.append(f"| {metric} | {format_value(value, '0')} |")
+
+    return lines
+
+
+def build_missing_kb_table(
+    kb_entries: list[dict[str, Any]],
+    missing_kbs: list[str],
+) -> list[str]:
+    """Build a Markdown table for missing KB entries."""
+
+    missing_set = set(missing_kbs)
+
+    lines = [
+        "| KB | Months | CVEs | Supersedes |",
+        "|---|---|---:|---|",
+    ]
+
+    missing_entries = [
+        entry
+        for entry in kb_entries
+        if entry.get("KB") in missing_set
+    ]
+
+    if not missing_entries:
+        lines.append("| None | None | 0 | None |")
+        return lines
+
+    for entry in missing_entries:
+        kb_id = format_value(entry.get("KB"))
+        months = format_list(entry.get("Months") or [])
+        cve_count = len(entry.get("Cves") or [])
+        supersedes = format_list(entry.get("Supersedes") or [])
+
+        lines.append(f"| {kb_id} | {months} | {cve_count} | {supersedes} |")
+
+    return lines
+
+
+def build_advisory_table(
     kb_entries: list[dict[str, Any]],
     missing_kbs: list[str],
 ) -> list[str]:
@@ -49,6 +111,10 @@ def build_kb_table(
         "| KB | Status | Months | CVEs | Supersedes | Update type |",
         "|---|---|---|---:|---|---|",
     ]
+
+    if not kb_entries:
+        lines.append("| None | None | None | 0 | None | None |")
+        return lines
 
     for entry in kb_entries:
         kb_id = format_value(entry.get("KB"))
@@ -81,66 +147,113 @@ def build_markdown_report(scan_result: dict[str, Any]) -> str:
 
     generated_at = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
 
+    logical_present_count = len(installed_kbs)
+    expected_kb_count = len(
+        {
+            entry.get("KB")
+            for entry in kb_entries
+            if entry.get("KB")
+        }
+    )
+
     lines = [
         "# Kolektria Scan Report",
         "",
-        "## Summary",
-        "",
-        f"- Generated: {generated_at}",
-        f"- OS: {format_value(baseline.get('OsName'))}",
-        f"- Build: {format_value(baseline.get('Build'))}",
-        f"- Architecture: {format_value(baseline.get('Architecture'))}",
-        f"- Product hint: {format_value(baseline.get('ProductNameHint'))}",
-        f"- Installed KBs collected: {len(installed_kbs)}",
-        f"- MSRC months requested: {len(months_requested)}",
-        f"- MSRC months with entries: {len(months_with_entries)}",
-        f"- KB advisory entries: {len(kb_entries)}",
-        f"- Missing KBs identified: {len(missing_kbs)}",
-        "",
-        "## Baseline",
-        "",
-        f"- OS name: {format_value(baseline.get('OsName'))}",
-        f"- OS edition: {format_value(baseline.get('OsEdition'))}",
-        f"- Display version: {format_value(baseline.get('DisplayVersion'))}",
-        f"- Build: {format_value(baseline.get('Build'))}",
-        f"- Architecture: {format_value(baseline.get('Architecture'))}",
-        f"- Administrator context: {format_value(baseline.get('IsAdmin'))}",
-        f"- LCU MonthId: {format_value(baseline.get('LcuMonthId'))}",
-        f"- LCU package name: {format_value(baseline.get('LcuPackageName'))}",
-        f"- LCU install time: {format_value(baseline.get('LcuInstallTime'))}",
-        f"- MSRC latest MonthId: {format_value(baseline.get('MsrcLatestMonthId'))}",
-        f"- Resolved product MonthId: {format_value(baseline.get('ResolvedProductMonthId'))}",
-        f"- Product hint: {format_value(baseline.get('ProductNameHint'))}",
-        "",
-        "## Installed KB Inventory",
-        "",
-        format_list(installed_kbs, "No installed KBs collected"),
-        "",
-        "## MSRC Correlation",
-        "",
-        f"- Months requested: {format_list(months_requested)}",
-        f"- Months with product rows: {format_list(months_with_entries)}",
-        "",
-        "## Missing KBs",
-        "",
-        format_list(missing_kbs, "No missing KBs identified"),
-        "",
-        "## KB Advisory Map",
+        "## Scan Summary",
         "",
     ]
 
-    lines.extend(build_kb_table(kb_entries, missing_kbs))
+    lines.extend(
+        build_key_value_table(
+            [
+                ("Generated", generated_at),
+                ("Product hint", baseline.get("ProductNameHint")),
+                ("Installed KBs", len(installed_kbs)),
+                ("MSRC months requested", len(months_requested)),
+                ("MSRC months with entries", len(months_with_entries)),
+                ("Advisory KB entries", len(kb_entries)),
+                ("Missing KBs", len(missing_kbs)),
+            ]
+        )
+    )
 
     lines.extend(
         [
             "",
-            "## Method",
+            "## Missing Update State",
             "",
-            "Kolektria collects Windows baseline context, installed KB inventory, MSRC advisory mappings, and supersedence relationships. Missing KBs are calculated after expanding installed KB presence through supersedence evidence.",
+        ]
+    )
+
+    lines.extend(
+        build_metric_table(
+            [
+                ("Expected KBs", expected_kb_count),
+                ("Installed KBs", len(installed_kbs)),
+                ("Missing KBs", len(missing_kbs)),
+            ]
+        )
+    )
+
+    lines.extend(
+        [
             "",
-            "## Notes",
+            "## Missing KBs",
             "",
-            "This report is generated from local authorised host evidence and is intended for downstream Remetria analysis.",
+        ]
+    )
+
+    lines.extend(build_missing_kb_table(kb_entries, missing_kbs))
+
+    lines.extend(
+        [
+            "",
+            "## Advisory Map",
+            "",
+        ]
+    )
+
+    lines.extend(build_advisory_table(kb_entries, missing_kbs))
+
+    lines.extend(
+        [
+            "",
+            "## Host Baseline",
+            "",
+        ]
+    )
+
+    lines.extend(
+        build_key_value_table(
+            [
+                ("OS name", baseline.get("OsName")),
+                ("OS edition", baseline.get("OsEdition")),
+                ("Display version", baseline.get("DisplayVersion")),
+                ("Build", baseline.get("Build")),
+                ("Architecture", baseline.get("Architecture")),
+                ("LCU MonthId", baseline.get("LcuMonthId")),
+                ("LCU package name", baseline.get("LcuPackageName")),
+                ("LCU install month", baseline.get("LcuInstallMonth")),
+                ("Patch age days", baseline.get("PatchAgeDays")),
+                ("MSRC latest MonthId", baseline.get("MsrcLatestMonthId")),
+                ("Resolved product MonthId", baseline.get("ResolvedProductMonthId")),
+                ("Product hint", baseline.get("ProductNameHint")),
+            ]
+        )
+    )
+
+    lines.extend(
+        [
+            "",
+            "## Collection Method",
+            "",
+            "Kolektria collects Windows update-state evidence, installed KB inventory, MSRC advisory mappings, and supersedence relationships. Missing KBs are calculated by comparing expected advisory KBs against installed KBs after expanding logical presence through supersedence evidence.",
+            "",
+            "## Scope Notes",
+            "",
+            "This report is generated from authorised local host evidence and is intended for downstream Remetria analysis.",
+            "",
+            "Kolektria does not collect hostname, username, device name, serial number, IP address, MAC address, domain, local file paths, installed applications, or user activity. The scan is limited to Windows update-state and MSRC advisory-mapping evidence.",
             "",
         ]
     )
