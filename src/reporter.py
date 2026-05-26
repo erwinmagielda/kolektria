@@ -66,29 +66,31 @@ def build_key_value_table(rows: list[tuple[str, Any]]) -> list[str]:
     return lines
 
 
-def build_metric_table(rows: list[tuple[str, Any]]) -> list[str]:
-    """Build a two-column Markdown metric table."""
+def build_metric_explanation_table(rows: list[tuple[str, Any, str]]) -> list[str]:
+    """Build a Markdown table containing metrics and explanations."""
 
     lines = [
-        "| Metric | Value |",
-        "|---|---:|",
+        "| Metric | Value | Explanation |",
+        "|---|---:|---|",
     ]
 
-    for metric, value in rows:
-        lines.append(f"| {metric} | {format_value(value, '0')} |")
+    for metric, value, explanation in rows:
+        lines.append(
+            f"| {metric} | {format_value(value, '0')} | {explanation} |"
+        )
 
     return lines
 
 
-def build_missing_kb_table(
+def build_missing_kb_evidence_table(
     kb_entries: list[dict[str, Any]],
     missing_kbs: list[str],
 ) -> list[str]:
     """Build a Markdown table for missing KB evidence and related CVEs."""
 
     lines = [
-        "| KB | Months | CVE count | CVEs | Supersedes |",
-        "|---|---|---:|---|---|",
+        "| ID | KB | Status | Months | CVE Count | CVEs | Supersedes | Update Type |",
+        "|---:|---|---|---|---:|---|---|---|",
     ]
 
     missing_entries = get_missing_entries(
@@ -97,52 +99,50 @@ def build_missing_kb_table(
     )
 
     if not missing_entries:
-        lines.append("| None | None | 0 | None | None |")
+        lines.append("| 0 | None | Not missing | None | 0 | None | None | None |")
         return lines
 
-    for entry in missing_entries:
+    for index, entry in enumerate(missing_entries, start=1):
         kb_id = format_value(entry.get("KB"))
         months = format_list(entry.get("Months") or [])
         cves = entry.get("Cves") or []
         cve_count = len(cves)
         cve_list = format_list(cves)
         supersedes = format_list(entry.get("Supersedes") or [])
+        update_type = format_value(entry.get("UpdateType"))
 
         lines.append(
-            f"| {kb_id} | {months} | {cve_count} | {cve_list} | {supersedes} |"
+            f"| {index} | {kb_id} | Missing | {months} | {cve_count} | {cve_list} | {supersedes} | {update_type} |"
         )
 
     return lines
 
 
-def build_advisory_table(
-    kb_entries: list[dict[str, Any]],
-    missing_kbs: list[str],
-) -> list[str]:
-    """Build a compact Markdown table for all KB advisory entries."""
-
-    missing_set = set(missing_kbs)
+def build_baseline_evidence_table(baseline: dict[str, Any]) -> list[str]:
+    """Build the baseline evidence table."""
 
     lines = [
-        "| KB | Status | Months | CVE count | Supersedes | Update type |",
-        "|---|---|---|---:|---|---|",
+        "| Field | Value |",
+        "|---|---|",
     ]
 
-    if not kb_entries:
-        lines.append("| None | None | None | 0 | None | None |")
-        return lines
+    rows = [
+        ("OS Name", baseline.get("OsName")),
+        ("OS Edition", baseline.get("OsEdition")),
+        ("Display Version", baseline.get("DisplayVersion")),
+        ("Build", baseline.get("Build")),
+        ("Architecture", baseline.get("Architecture")),
+        ("LCU MonthId", baseline.get("LcuMonthId")),
+        ("LCU Package Name", baseline.get("LcuPackageName")),
+        ("LCU Install Month", baseline.get("LcuInstallMonth")),
+        ("Patch Age Days", baseline.get("PatchAgeDays")),
+        ("MSRC Latest MonthId", baseline.get("MsrcLatestMonthId")),
+        ("Resolved Product MonthId", baseline.get("ResolvedProductMonthId")),
+        ("Product Hint", baseline.get("ProductNameHint")),
+    ]
 
-    for entry in kb_entries:
-        kb_id = format_value(entry.get("KB"))
-        status = "Missing" if kb_id in missing_set else "Present or superseded"
-        months = format_list(entry.get("Months") or [])
-        cve_count = len(entry.get("Cves") or [])
-        supersedes = format_list(entry.get("Supersedes") or [])
-        update_type = format_value(entry.get("UpdateType"))
-
-        lines.append(
-            f"| {kb_id} | {status} | {months} | {cve_count} | {supersedes} | {update_type} |"
-        )
+    for field, value in rows:
+        lines.append(f"| {field} | {format_value(value)} |")
 
     return lines
 
@@ -155,7 +155,6 @@ def build_scan_outcome_section(
     generated_at: str,
     baseline: dict[str, Any],
     months_requested: list[str],
-    kb_entries: list[dict[str, Any]],
     supersedence_summary: dict[str, Any],
 ) -> list[str]:
     """Build the scan outcome section."""
@@ -165,41 +164,60 @@ def build_scan_outcome_section(
         "",
         "## Scan Outcome",
         "",
-        *build_key_value_table(
-            [
-                ("Generated", generated_at),
-                ("Product hint", baseline.get("ProductNameHint")),
-                ("LCU MonthId", baseline.get("LcuMonthId")),
-                ("MSRC latest MonthId", baseline.get("MsrcLatestMonthId")),
-                ("Months requested", format_list(months_requested)),
-                ("Advisory KB entries", len(kb_entries)),
-                ("Missing KBs", supersedence_summary.get("MissingKbs")),
-            ]
-        ),
+        "This section summarises the scan result and the Windows update-state context used for MSRC correlation.",
+        "",
+        f"**Date Generated:** {generated_at}",
+        "",
+        f"**Operating System:** {format_value(baseline.get('OsName'))}",
+        "",
+        f"**Months Requested:** {format_list(months_requested)}",
+        "",
+        f"**Missing KBs:** {format_value(supersedence_summary.get('MissingKbs'), '0')}",
+        "",
     ]
 
 
-def build_missing_state_section(
-    kb_entries: list[dict[str, Any]],
+def build_missing_update_state_section(
     missing_kbs: list[str],
     supersedence_summary: dict[str, Any],
 ) -> list[str]:
-    """Build missing update state and missing KB evidence sections."""
+    """Build the missing update state section."""
 
     lines = [
-        "",
         "## Missing Update State",
+        "",
+        "This section explains how Kolektria calculated the missing update state after applying supersedence evidence.",
         "",
     ]
 
     lines.extend(
-        build_metric_table(
+        build_metric_explanation_table(
             [
-                ("Expected KBs", supersedence_summary.get("ExpectedKbs")),
-                ("Installed KBs", supersedence_summary.get("InstalledKbs")),
-                ("Installed or superseded KBs", supersedence_summary.get("InstalledOrSupersededKbs")),
-                ("Supersedence relationships", supersedence_summary.get("RelationshipsResolved")),
-                ("Missing KBs", supersedence_summary.get("MissingKbs")),
+                (
+                    "Expected KBs",
+                    supersedence_summary.get("ExpectedKbs"),
+                    "KBs identified from MSRC advisory mappings for the requested Windows product and month range.",
+                ),
+                (
+                    "Installed KBs",
+                    supersedence_summary.get("InstalledKbs"),
+                    "KBs detected directly from the local Windows update inventory.",
+                ),
+                (
+                    "Installed Or Superseded KBs",
+                    supersedence_summary.get("InstalledOrSupersededKbs"),
+                    "KBs treated as present after expanding installed KBs through supersedence relationships.",
+                ),
+                (
+                    "Supersedence Relationships",
+                    supersedence_summary.get("RelationshipsResolved"),
+                    "Older KBs covered by installed superseding updates.",
+                ),
+                (
+                    "Missing KBs",
+                    supersedence_summary.get("MissingKbs"),
+                    "Expected KBs not found directly and not covered through supersedence.",
+                ),
             ]
         )
     )
@@ -207,29 +225,37 @@ def build_missing_state_section(
     lines.extend(
         [
             "",
-            "## Missing KB Evidence",
+            "**Missing KB List:**",
+            "",
+            format_list(missing_kbs, "No missing KBs identified"),
             "",
         ]
     )
 
-    lines.extend(build_missing_kb_table(kb_entries, missing_kbs))
-
     return lines
 
 
-def build_advisory_evidence_section(
+def build_missing_kb_evidence_section(
     kb_entries: list[dict[str, Any]],
     missing_kbs: list[str],
 ) -> list[str]:
-    """Build the advisory evidence section."""
+    """Build the missing KB evidence section."""
 
     lines = [
+        "## Missing KB Evidence",
         "",
-        "## Advisory Evidence",
+        "This section links each missing KB to the related MSRC month, CVE list, supersedence data, and update type.",
         "",
     ]
 
-    lines.extend(build_advisory_table(kb_entries, missing_kbs))
+    lines.extend(
+        build_missing_kb_evidence_table(
+            kb_entries=kb_entries,
+            missing_kbs=missing_kbs,
+        )
+    )
+
+    lines.append("")
 
     return lines
 
@@ -238,38 +264,22 @@ def build_baseline_evidence_section(baseline: dict[str, Any]) -> list[str]:
     """Build the baseline evidence section."""
 
     lines = [
-        "",
         "## Baseline Evidence",
+        "",
+        "This section records the non-identifying Windows update-state evidence used to resolve the correct MSRC product context.",
         "",
     ]
 
-    lines.extend(
-        build_key_value_table(
-            [
-                ("OS name", baseline.get("OsName")),
-                ("OS edition", baseline.get("OsEdition")),
-                ("Display version", baseline.get("DisplayVersion")),
-                ("Build", baseline.get("Build")),
-                ("Architecture", baseline.get("Architecture")),
-                ("LCU MonthId", baseline.get("LcuMonthId")),
-                ("LCU package name", baseline.get("LcuPackageName")),
-                ("LCU install month", baseline.get("LcuInstallMonth")),
-                ("Patch age days", baseline.get("PatchAgeDays")),
-                ("MSRC latest MonthId", baseline.get("MsrcLatestMonthId")),
-                ("Resolved product MonthId", baseline.get("ResolvedProductMonthId")),
-                ("Product hint", baseline.get("ProductNameHint")),
-            ]
-        )
-    )
+    lines.extend(build_baseline_evidence_table(baseline))
+    lines.append("")
 
     return lines
 
 
 def build_method_section() -> list[str]:
-    """Build the report method section."""
+    """Build the method and scope section."""
 
     return [
-        "",
         "## Method",
         "",
         "Kolektria collects Windows update-state evidence, installed KB inventory, MSRC advisory mappings, and supersedence relationships. Missing KBs are calculated by comparing expected advisory KBs against installed KBs after expanding logical presence through supersedence evidence.",
@@ -305,21 +315,19 @@ def build_markdown_report(scan_result: dict[str, Any]) -> str:
             generated_at=generated_at,
             baseline=baseline,
             months_requested=months_requested,
-            kb_entries=kb_entries,
             supersedence_summary=supersedence_summary,
         )
     )
 
     lines.extend(
-        build_missing_state_section(
-            kb_entries=kb_entries,
+        build_missing_update_state_section(
             missing_kbs=missing_kbs,
             supersedence_summary=supersedence_summary,
         )
     )
 
     lines.extend(
-        build_advisory_evidence_section(
+        build_missing_kb_evidence_section(
             kb_entries=kb_entries,
             missing_kbs=missing_kbs,
         )
