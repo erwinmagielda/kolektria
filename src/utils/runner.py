@@ -1,7 +1,8 @@
 """
 Kolektria PowerShell runner.
 
-Provides a small wrapper around PowerShell script execution and JSON parsing.
+Provides a small wrapper around non-interactive PowerShell script execution
+and JSON parsing.
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ def run_powershell_script(
     command = [
         "powershell.exe",
         "-NoProfile",
+        "-NonInteractive",
         "-ExecutionPolicy",
         "Bypass",
         "-File",
@@ -36,6 +38,7 @@ def run_powershell_script(
 
     result = subprocess.run(
         command,
+        stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
         check=False,
