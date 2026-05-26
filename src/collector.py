@@ -343,6 +343,9 @@ def collect_msrc_entries(
     months_with_entries: list[str] = []
 
     for month_chunk in chunk_list(month_ids, 3):
+        chunk_text = ", ".join(month_chunk)
+        print_detail(f"Processing MonthId chunk: {chunk_text}")
+
         msrc_data = run_powershell_script(
             ADAPTER_SCRIPT_PATH,
             extra_args=[
@@ -351,7 +354,17 @@ def collect_msrc_entries(
                 "-ProductNameHint",
                 product_name_hint,
             ],
+            timeout_seconds=240,
         )
+
+        entries = msrc_data.get("KbEntries") or []
+        adapter_months = msrc_data.get("MonthsWithProductRows") or []
+
+        if entries:
+            merge_kb_entries(merged_entries, entries)
+            months_with_entries.extend(adapter_months or month_chunk)
+
+        print_detail(f"Chunk KB entries: {len(entries)}")
 
         entries = msrc_data.get("KbEntries") or []
         adapter_months = msrc_data.get("MonthsWithProductRows") or []

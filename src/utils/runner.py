@@ -20,6 +20,7 @@ from typing import Any
 def run_powershell_script(
     script_path: Path,
     extra_args: list[str] | None = None,
+    timeout_seconds: int = 180,
 ) -> dict[str, Any]:
     """Execute a PowerShell script and return parsed JSON output."""
 
@@ -27,6 +28,7 @@ def run_powershell_script(
 
     command = [
         "powershell.exe",
+        "-NoLogo",
         "-NoProfile",
         "-NonInteractive",
         "-ExecutionPolicy",
@@ -36,13 +38,19 @@ def run_powershell_script(
         *args,
     ]
 
-    result = subprocess.run(
-        command,
-        stdin=subprocess.DEVNULL,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            command,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            f"{script_path.name} timed out after {timeout_seconds} seconds"
+        ) from exc
 
     if result.returncode != 0:
         error_output = result.stderr.strip() or result.stdout.strip()
