@@ -3,12 +3,13 @@
     Kolektria baseline collector.
 
 .DESCRIPTION
-    Collects host metadata required for Windows and MSRC correlation.
+    Collects Windows update-state evidence required for Windows and MSRC correlation.
 
     Resolves operating system identity, architecture, privilege context, latest
     MSRC month, product name hints, and latest cumulative update context.
 
-    Emits a stable JSON object consumed by collector.py.
+    Exact LCU installation timestamps are not emitted. The collector derives
+    lower-precision update-state fields suitable for downstream Remetria analysis.
 
 .OUTPUTS
     JSON object written to stdout.
@@ -377,9 +378,10 @@ function Get-KolektriaLcuContext {
 
     if (-not $IsAdmin) {
         return [pscustomobject]@{
-            LcuMonthId     = $null
-            LcuPackageName = $null
-            LcuInstallTime = $null
+            LcuMonthId      = $null
+            LcuPackageName  = $null
+            LcuInstallMonth = $null
+            PatchAgeDays    = $null
         }
     }
 
@@ -391,23 +393,29 @@ function Get-KolektriaLcuContext {
 
         if (-not $latestCumulativeUpdate) {
             return [pscustomobject]@{
-                LcuMonthId     = $null
-                LcuPackageName = $null
-                LcuInstallTime = $null
+                LcuMonthId      = $null
+                LcuPackageName  = $null
+                LcuInstallMonth = $null
+                PatchAgeDays    = $null
             }
         }
 
-        return [pscustomobject]@{
-            LcuMonthId     = (Get-Date $latestCumulativeUpdate.InstallTime).ToString('yyyy-MMM')
-            LcuPackageName = $latestCumulativeUpdate.PackageName
-            LcuInstallTime = $latestCumulativeUpdate.InstallTime
+        $installTime = Get-Date $latestCumulativeUpdate.InstallTime
+        $patchAgeDays = [int]((Get-Date).Date - $installTime.Date).TotalDays
+
+        [pscustomobject]@{
+            LcuMonthId      = $installTime.ToString('yyyy-MMM')
+            LcuPackageName  = $latestCumulativeUpdate.PackageName
+            LcuInstallMonth = $installTime.ToString('yyyy-MMM')
+            PatchAgeDays    = $patchAgeDays
         }
     }
     catch {
         return [pscustomobject]@{
-            LcuMonthId     = $null
-            LcuPackageName = $null
-            LcuInstallTime = $null
+            LcuMonthId      = $null
+            LcuPackageName  = $null
+            LcuInstallMonth = $null
+            PatchAgeDays    = $null
         }
     }
 }
@@ -444,7 +452,8 @@ function Get-KolektriaBaseline {
 
         LcuMonthId             = $lcuContext.LcuMonthId
         LcuPackageName         = $lcuContext.LcuPackageName
-        LcuInstallTime         = $lcuContext.LcuInstallTime
+        LcuInstallMonth        = $lcuContext.LcuInstallMonth
+        PatchAgeDays           = $lcuContext.PatchAgeDays
 
         MsrcLatestMonthId      = $msrcLatestMonthId
         ResolvedProductMonthId = $productResolution.ResolvedProductMonthId
