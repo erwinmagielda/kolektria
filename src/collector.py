@@ -24,6 +24,7 @@ from utils.console import (
     print_banner,
     print_error,
     print_info,
+    print_section,
     print_step,
     print_success,
     print_warning,
@@ -39,6 +40,17 @@ from utils.paths import (
     relative_path,
 )
 from utils.runner import run_powershell_script
+
+
+# ------------------------------------------------------------
+# DISPLAY HELPERS
+# ------------------------------------------------------------
+
+def pluralise(count: int, singular: str, plural: str | None = None) -> str:
+    """Return a count with a readable singular or plural label."""
+
+    label = singular if count == 1 else (plural or f"{singular}s")
+    return f"{count} {label}"
 
 
 # ------------------------------------------------------------
@@ -101,7 +113,7 @@ def build_month_ids_from_lcu(
         end_date = datetime.now(UTC).replace(day=1)
 
     if start_date > end_date:
-        print_warning("LCU month is newer than latest MSRC month. Using latest MSRC month only.")
+        print_warning("LCU month is newer than latest MSRC month. Using latest MSRC month only")
         start_date = end_date
 
     month_ids: list[str] = []
@@ -245,12 +257,13 @@ def compute_supersedence(
 # SCAN COLLECTION
 # ------------------------------------------------------------
 
-def collect_scan(max_months: int = 48) -> dict[str, Any]:
-    """Run the Kolektria collection workflow and return scan JSON."""
+def collect_baseline() -> tuple[dict[str, Any], str]:
+    """Collect Windows baseline context and return product name hint."""
 
+    print_section("Baseline collection")
     print_step("Collecting Windows baseline context")
-    baseline = run_powershell_script(BASELINE_SCRIPT_PATH)
 
+    baseline = run_powershell_script(BASELINE_SCRIPT_PATH)
     product_name_hint = baseline.get("ProductNameHint")
 
     if not product_name_hint:
@@ -261,19 +274,39 @@ def collect_scan(max_months: int = 48) -> dict[str, Any]:
     print_info(f"Build: {baseline.get('Build', 'Unknown')}")
     print_info(f"Product hint: {product_name_hint}")
 
+    return baseline, str(product_name_hint)
+
+
+def collect_inventory() -> set[str]:
+    """Collect installed KB inventory."""
+
+    print_section("Inventory collection")
     print_step("Collecting installed KB inventory")
+
     inventory = run_powershell_script(INVENTORY_SCRIPT_PATH)
     installed_kbs = set(inventory.get("AllInstalledKbs") or [])
 
-    print_success(f"Installed KB inventory collected: {len(installed_kbs)} KBs")
+    print_success(f"Installed KB inventory collected: {pluralise(len(installed_kbs), 'KB')}")
 
+    return installed_kbs
+
+
+def collect_msrc_entries(
+    baseline: dict[str, Any],
+    product_name_hint: str,
+    max_months: int,
+) -> tuple[list[str], list[str], list[dict[str, Any]]]:
+    """Collect and merge MSRC advisory KB entries."""
+
+    print_section("MSRC correlation")
     print_step("Building MSRC MonthId range from LCU context")
+
     month_ids = build_month_ids_from_lcu(
         baseline=baseline,
         max_months=max_months,
     )
 
-    print_success(f"Month range built: {len(month_ids)} month(s)")
+    print_success(f"Month range built: {pluralise(len(month_ids), 'month')}")
     print_info(f"Months requested: {', '.join(month_ids)}")
 
     merged_entries: dict[str, dict[str, Any]] = {}
@@ -306,8 +339,20 @@ def collect_scan(max_months: int = 48) -> dict[str, Any]:
 
     kb_entries = normalise_kb_entries(list(merged_entries.values()))
 
-    print_success(f"MSRC advisory mapping collected: {len(kb_entries)} KB entries")
+    print_success(
+        f"MSRC advisory mapping collected: {pluralise(len(kb_entries), 'KB entry', 'KB entries')}"
+    )
 
+    return month_ids, sorted(set(months_with_entries)), kb_entries
+
+
+def calculate_missing_kbs(
+    kb_entries: list[dict[str, Any]],
+    installed_kbs: set[str],
+) -> list[str]:
+    """Calculate missing KBs after supersedence expansion."""
+
+    print_section("Supersedence analysis")
     print_step("Calculating supersedence and missing KBs")
 
     logical_present_kbs, superseded_by = compute_supersedence(
@@ -326,13 +371,33 @@ def collect_scan(max_months: int = 48) -> dict[str, Any]:
     print_info(f"Expected KBs from advisory map: {len(expected_kbs)}")
     print_info(f"Installed or superseded KBs: {len(logical_present_kbs)}")
     print_info(f"Supersedence relationships resolved: {len(superseded_by)}")
-    print_success(f"Missing KBs identified: {len(missing_kbs)}")
+    print_success(f"Missing KBs identified: {pluralise(len(missing_kbs), 'KB')}")
+
+    return missing_kbs
+
+
+def collect_scan(max_months: int = 48) -> dict[str, Any]:
+    """Run the Kolektria collection workflow and return scan JSON."""
+
+    baseline, product_name_hint = collect_baseline()
+    installed_kbs = collect_inventory()
+
+    month_ids, months_with_entries, kb_entries = collect_msrc_entries(
+        baseline=baseline,
+        product_name_hint=product_name_hint,
+        max_months=max_months,
+    )
+
+    missing_kbs = calculate_missing_kbs(
+        kb_entries=kb_entries,
+        installed_kbs=installed_kbs,
+    )
 
     return {
         "Baseline": baseline,
         "InstalledKbs": sorted(installed_kbs),
         "MonthsRequested": month_ids,
-        "MonthsWithEntries": sorted(set(months_with_entries)),
+        "MonthsWithEntries": months_with_entries,
         "KbEntries": kb_entries,
         "MissingKbs": missing_kbs,
     }
@@ -382,6 +447,34 @@ def parse_args() -> argparse.Namespace:
 # MAIN WORKFLOW
 # ------------------------------------------------------------
 
+def prepare_environment() -> None:
+    """Validate files and prepare runtime workspace."""
+
+    print_section("Environment preparation")
+
+    print_step("Validating required collector files")
+    ensure_required_files()
+    print_success("Required collector files found")
+
+    print_step("Preparing runtime workspace")
+    clear_runtime_directory()
+    print_success(f"Runtime workspace ready: {relative_path(RUNTIME_DIR)}")
+
+
+def write_scan_output(scan_result: dict[str, Any]) -> None:
+    """Write scan output and print generated artefact paths."""
+
+    print_section("Runtime export")
+
+    print_step("Writing scan JSON")
+    runtime_scan_path = export_runtime_scan(scan_result)
+    collected_scan_path = COLLECTED_DIR / runtime_scan_path.name
+
+    print_success(f"Runtime scan saved: {relative_path(runtime_scan_path)}")
+    print_success(f"Archived scan saved: {relative_path(collected_scan_path)}")
+    print_success("Kolektria collection completed")
+
+
 def main() -> int:
     """Run the Kolektria collector workflow."""
 
@@ -389,24 +482,11 @@ def main() -> int:
 
     try:
         print_banner()
-
-        print_step("Validating required collector files")
-        ensure_required_files()
-        print_success("Required collector files found")
-
-        print_step("Preparing runtime workspace")
-        clear_runtime_directory()
-        print_success(f"Runtime workspace ready: {relative_path(RUNTIME_DIR)}")
+        prepare_environment()
 
         scan_result = collect_scan(max_months=args.max_months)
 
-        print_step("Writing scan JSON")
-        runtime_scan_path = export_runtime_scan(scan_result)
-        collected_scan_path = COLLECTED_DIR / runtime_scan_path.name
-
-        print_success(f"Runtime scan saved: {relative_path(runtime_scan_path)}")
-        print_success(f"Archived scan saved: {relative_path(collected_scan_path)}")
-        print_success("Kolektria collection completed")
+        write_scan_output(scan_result)
 
         return 0
 
