@@ -63,23 +63,39 @@ if %errorlevel% neq 0 (
 )
 
 REM ------------------------------------------------------------
-REM MSRC MODULE CHECK
+REM MSRC MODULE BOOTSTRAP
 REM ------------------------------------------------------------
+
+echo [*] Checking MSRC PowerShell module
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "if (Get-Module -ListAvailable -Name MsrcSecurityUpdates) { exit 0 } else { exit 1 }" >nul 2>&1
 
-if %errorlevel% neq 0 (
-    echo [X] Required PowerShell module is missing:
-    echo     MsrcSecurityUpdates
+if %errorlevel% equ 0 (
+    echo     [+] MSRC PowerShell module found
+) else (
+    echo     [!] MSRC PowerShell module missing
+    echo     [*] Installing MSRC PowerShell module for current user
     echo.
-    echo Kolektria requires this module to query Microsoft Security Response Center data
+
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
+        "$ErrorActionPreference = 'Stop';" ^
+        "Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Scope CurrentUser -Force;" ^
+        "Set-PSRepository -Name PSGallery -InstallationPolicy Trusted;" ^
+        "Install-Module -Name MsrcSecurityUpdates -Scope CurrentUser -Force -AllowClobber"
+
+    if %errorlevel% neq 0 (
+        echo.
+        echo [X] Failed to install MSRC PowerShell module
+        echo.
+        pause
+        exit /b 1
+    )
+
     echo.
-    echo Install it manually with:
-    echo powershell -NoProfile -Command "Install-Module MsrcSecurityUpdates -Scope CurrentUser"
-    echo.
-    pause
-    exit /b 1
+    echo     [+] MSRC PowerShell module installed
 )
+
+echo.
 
 REM ------------------------------------------------------------
 REM REQUIRED FILE CHECKS
