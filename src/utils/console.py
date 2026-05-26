@@ -29,13 +29,23 @@ def print_banner() -> None:
     """Print the Kolektria startup banner."""
 
     print()
-    print("============================================================")
-    print()
     print(KOLEKTRIA_LOGO.rstrip())
-    print("Kolektria")
     print()
-    print("============================================================")
+    print("Windows Patch-State Collector")
     print()
+
+
+# ------------------------------------------------------------
+# PROMPTS
+# ------------------------------------------------------------
+
+def confirm_scan() -> bool:
+    """Ask the user whether to run a collection scan."""
+
+    response = input("Run collection scan? [Y/n]: ").strip().lower()
+    print()
+
+    return response in ("", "y", "yes")
 
 
 # ------------------------------------------------------------

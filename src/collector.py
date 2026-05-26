@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from utils.console import (
+    confirm_scan,
     print_banner,
     print_error,
     print_info,
@@ -482,12 +483,22 @@ def main() -> int:
 
     try:
         print_banner()
+
+        if not confirm_scan():
+            print_info("Collection cancelled")
+            return 0
+
         prepare_environment()
 
         scan_result = collect_scan(max_months=args.max_months)
 
         write_scan_output(scan_result)
 
+        return 0
+
+    except KeyboardInterrupt:
+        print()
+        print_info("Collection cancelled")
         return 0
 
     except Exception as exc:
