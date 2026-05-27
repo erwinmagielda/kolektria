@@ -6,6 +6,7 @@ Keeps scanner output consistent across the launcher and Python workflow.
 
 from __future__ import annotations
 
+import ctypes
 import msvcrt
 import sys
 
@@ -42,6 +43,43 @@ def print_banner() -> None:
     print()
     print("=" * get_logo_width())
     print()
+
+
+# ------------------------------------------------------------
+# CONSOLE MODE
+# ------------------------------------------------------------
+
+def disable_quick_edit_mode() -> None:
+    """
+    Disable QuickEdit mode for the current Windows console.
+
+    QuickEdit can pause console applications when text is selected.
+    This is best-effort and only applies to classic Windows console hosts.
+    """
+
+    if sys.platform != "win32":
+        return
+
+    kernel32 = ctypes.windll.kernel32
+
+    std_input_handle = kernel32.GetStdHandle(-10)
+
+    if std_input_handle == -1:
+        return
+
+    mode = ctypes.c_uint()
+
+    if not kernel32.GetConsoleMode(std_input_handle, ctypes.byref(mode)):
+        return
+
+    ENABLE_QUICK_EDIT_MODE = 0x0040
+    ENABLE_EXTENDED_FLAGS = 0x0080
+
+    new_mode = mode.value
+    new_mode &= ~ENABLE_QUICK_EDIT_MODE
+    new_mode |= ENABLE_EXTENDED_FLAGS
+
+    kernel32.SetConsoleMode(std_input_handle, new_mode)
 
 
 # ------------------------------------------------------------

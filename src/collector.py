@@ -24,6 +24,7 @@ from typing import Any
 from reporter import export_markdown_report
 from utils.console import (
     confirm_scan,
+    disable_quick_edit_mode,
     print_banner,
     print_detail,
     print_error,
@@ -363,6 +364,7 @@ def collect_msrc_entries(
 
     print_result("MSRC MonthId range built")
     print_detail(f"Months requested: {format_months(month_ids)}")
+    print_detail("Timeout: 240 seconds")
 
     print()
     print_step("Querying MSRC advisory data")
@@ -553,6 +555,7 @@ def main() -> int:
     args = parse_args()
 
     try:
+        disable_quick_edit_mode()
         print_banner()
 
         if not confirm_scan():
