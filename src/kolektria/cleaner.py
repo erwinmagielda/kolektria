@@ -12,6 +12,7 @@ from pathlib import Path
 
 from utils.console import (
     print_detail,
+    print_info,
     print_result,
     print_section,
     print_step,
@@ -118,12 +119,25 @@ def remove_paths(paths: list[Path]) -> int:
     return removed_count
 
 
+def confirm_cleanup() -> bool:
+    """Ask the user to confirm generated artefact cleanup."""
+
+    print()
+    response = input("Proceed with cleanup? [y/N]: ").strip().lower()
+
+    return response in {"y", "yes"}
+
+
 # ------------------------------------------------------------
 # CLEAN WORKFLOW
 # ------------------------------------------------------------
 
-def clear_generated_artefacts() -> None:
-    """Clear generated Kolektria artefacts."""
+def clear_generated_artefacts() -> bool:
+    """
+    Clear generated Kolektria artefacts.
+
+    Returns True when cleanup was performed, otherwise False.
+    """
 
     cache_directories = find_python_cache_directories()
     bytecode_files = find_python_bytecode_files()
@@ -168,6 +182,16 @@ def clear_generated_artefacts() -> None:
     print_detail(f"Python cache directories: {cache_count}")
     print_detail(f"Total artefacts selected: {total_count}")
 
+    if total_count == 0:
+        print()
+        print_info("No generated artefacts selected for cleanup")
+        return False
+
+    if not confirm_cleanup():
+        print()
+        print_info("Cleanup cancelled")
+        return False
+
     print()
     print_step("Cleaning selected artefacts")
 
@@ -183,3 +207,5 @@ def clear_generated_artefacts() -> None:
     print_detail(f"PyInstaller workspace items removed: {pyinstaller_removed}")
     print_detail(f"Python bytecode files removed: {bytecode_removed}")
     print_detail(f"Python cache directories removed: {cache_removed}")
+
+    return True
