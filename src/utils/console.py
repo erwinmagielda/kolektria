@@ -70,6 +70,14 @@ def prompt_main_menu() -> str:
 # SECTION HEADERS
 # ------------------------------------------------------------
 
+def print_action(title: str) -> None:
+    """Print a selected main menu action header."""
+
+    print()
+    print(title)
+    print("=" * len(title))
+
+
 def print_section(title: str) -> None:
     """Print an internal workflow section header."""
 

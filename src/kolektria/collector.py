@@ -24,6 +24,7 @@ from typing import Any
 from kolektria.cleaner import clear_generated_artefacts
 from kolektria.reporter import export_markdown_report
 from utils.console import (
+    print_action,
     print_banner,
     print_detail,
     print_error,
@@ -549,6 +550,8 @@ def write_scan_output(scan_result: dict[str, Any]) -> None:
 def run_scan_action(args: argparse.Namespace) -> None:
     """Run the scan workflow from the interactive menu."""
 
+    print_action("Run Scan")
+
     prepare_environment()
     scan_result = collect_scan(max_months=args.max_months)
     write_scan_output(scan_result)
@@ -560,12 +563,16 @@ def run_scan_action(args: argparse.Namespace) -> None:
 def clear_artefacts_action() -> None:
     """Run the artefact cleanup workflow from the interactive menu."""
 
-    cleaned = clear_generated_artefacts()
+    result = clear_generated_artefacts()
 
     print()
 
-    if cleaned:
+    if result == "cleared":
         print_success("Clear Artefacts completed")
+        return
+
+    if result == "skipped":
+        print_info("Clear Artefacts skipped")
         return
 
     print_info("Clear Artefacts cancelled")

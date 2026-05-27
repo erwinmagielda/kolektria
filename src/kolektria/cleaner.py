@@ -9,12 +9,13 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
+from typing import Literal
 
 from utils.console import (
+    print_action,
     print_detail,
     print_info,
     print_result,
-    print_section,
     print_step,
 )
 from utils.paths import (
@@ -26,6 +27,13 @@ from utils.paths import (
     RUNTIME_DIR,
     relative_path,
 )
+
+
+# ------------------------------------------------------------
+# TYPES
+# ------------------------------------------------------------
+
+ClearArtefactsResult = Literal["cleared", "cancelled", "skipped"]
 
 
 # ------------------------------------------------------------
@@ -119,11 +127,11 @@ def remove_paths(paths: list[Path]) -> int:
     return removed_count
 
 
-def confirm_cleanup() -> bool:
-    """Ask the user to confirm generated artefact cleanup."""
+def confirm_clear_artefacts() -> bool:
+    """Ask the user to confirm generated artefact removal."""
 
     print()
-    response = input("Proceed with cleanup? [y/N]: ").strip().lower()
+    response = input("Clear selected artefacts? [y/N]: ").strip().lower()
 
     return response in {"y", "yes"}
 
@@ -132,11 +140,19 @@ def confirm_cleanup() -> bool:
 # CLEAN WORKFLOW
 # ------------------------------------------------------------
 
-def clear_generated_artefacts() -> bool:
+def clear_generated_artefacts() -> ClearArtefactsResult:
     """
     Clear generated Kolektria artefacts.
 
-    Returns True when cleanup was performed, otherwise False.
+    Returns:
+        cleared:
+            Artefacts were selected and removed.
+
+        cancelled:
+            Artefacts were selected, but the user declined confirmation.
+
+        skipped:
+            No generated artefacts were selected for removal.
     """
 
     cache_directories = find_python_cache_directories()
@@ -156,10 +172,10 @@ def clear_generated_artefacts() -> bool:
         cache_count
     )
 
-    print_section("Clear Artefacts")
+    print_action("Clear Artefacts")
 
     print_step("Reviewing generated artefact targets")
-    print_result("Cleanup plan prepared")
+    print_result("Clear plan prepared")
     print_detail(f"Runtime workspace: {relative_path(RUNTIME_DIR)}")
     print_detail(f"Generated reports: {relative_path(REPORTS_DIR)}")
     print_detail(f"PyInstaller workspace: {relative_path(BUILD_PYINSTALLER_DIR)}")
@@ -184,16 +200,14 @@ def clear_generated_artefacts() -> bool:
 
     if total_count == 0:
         print()
-        print_info("No generated artefacts selected for cleanup")
-        return False
+        print_info("No generated artefacts selected for clearing")
+        return "skipped"
 
-    if not confirm_cleanup():
-        print()
-        print_info("Cleanup cancelled")
-        return False
+    if not confirm_clear_artefacts():
+        return "cancelled"
 
     print()
-    print_step("Cleaning selected artefacts")
+    print_step("Clearing selected artefacts")
 
     runtime_removed = clear_directory_contents(RUNTIME_DIR)
     reports_removed = clear_directory_contents(REPORTS_DIR)
@@ -201,11 +215,11 @@ def clear_generated_artefacts() -> bool:
     bytecode_removed = remove_paths(bytecode_files)
     cache_removed = remove_paths(cache_directories)
 
-    print_result("Selected artefacts cleaned")
+    print_result("Selected artefacts cleared")
     print_detail(f"Runtime workspace items removed: {runtime_removed}")
     print_detail(f"Generated report items removed: {reports_removed}")
     print_detail(f"PyInstaller workspace items removed: {pyinstaller_removed}")
     print_detail(f"Python bytecode files removed: {bytecode_removed}")
     print_detail(f"Python cache directories removed: {cache_removed}")
 
-    return True
+    return "cleared"
