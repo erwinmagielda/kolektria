@@ -6,7 +6,6 @@ Keeps scanner output consistent across the launcher and Python workflow.
 
 from __future__ import annotations
 
-import ctypes
 import sys
 
 
@@ -50,42 +49,6 @@ def print_menu_title() -> None:
     print()
     print("Kolektria")
     print("-" * len("Kolektria"))
-
-
-# ------------------------------------------------------------
-# CONSOLE MODE
-# ------------------------------------------------------------
-
-def disable_quick_edit_mode() -> None:
-    """
-    Disable QuickEdit mode for the current Windows console.
-
-    QuickEdit can pause console applications when text is selected.
-    This is best-effort and only applies to classic Windows console hosts.
-    """
-
-    if sys.platform != "win32":
-        return
-
-    kernel32 = ctypes.windll.kernel32
-    std_input_handle = kernel32.GetStdHandle(-10)
-
-    if std_input_handle == -1:
-        return
-
-    mode = ctypes.c_uint()
-
-    if not kernel32.GetConsoleMode(std_input_handle, ctypes.byref(mode)):
-        return
-
-    enable_quick_edit_mode = 0x0040
-    enable_extended_flags = 0x0080
-
-    new_mode = mode.value
-    new_mode &= ~enable_quick_edit_mode
-    new_mode |= enable_extended_flags
-
-    kernel32.SetConsoleMode(std_input_handle, new_mode)
 
 
 # ------------------------------------------------------------

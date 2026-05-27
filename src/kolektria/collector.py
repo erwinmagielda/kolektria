@@ -24,7 +24,6 @@ from typing import Any
 from kolektria.cleaner import clear_generated_artefacts
 from kolektria.reporter import export_markdown_report
 from utils.console import (
-    disable_quick_edit_mode,
     print_banner,
     print_detail,
     print_error,
@@ -608,7 +607,6 @@ def main() -> int:
     args = parse_args()
 
     try:
-        disable_quick_edit_mode()
         return run_menu(args)
 
     except KeyboardInterrupt:
