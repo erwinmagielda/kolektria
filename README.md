@@ -127,23 +127,23 @@ data/
 ├── runtime/
 │   Stores the latest generated scan JSON.
 │
-└── collected/
-    Stores archived scan JSON copies preserved across cleanup.
+├── collected/
+│   Stores archived scan JSON copies preserved across cleanup.
 │
 docs/
-└── screenshots/
-    Stores README and portfolio screenshots.
+├── screenshots/
+│   Stores README and portfolio screenshots.
 │
 results/
-└── reports/
-    Stores generated Markdown scan reports.
+├── reports/
+│   Stores generated Markdown scan reports.
 │
 samples/
 ├── sample_scan.json
 │   Example scan output.
 │
-└── sample_report.md
-    Example Markdown report output.
+├── sample_report.md
+│   Example Markdown report output.
 │
 src/
 ├── kolektria/
