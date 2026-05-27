@@ -7,7 +7,6 @@ Keeps scanner output consistent across the launcher and Python workflow.
 from __future__ import annotations
 
 import ctypes
-import msvcrt
 import sys
 
 
@@ -93,27 +92,15 @@ def disable_quick_edit_mode() -> None:
 # PROMPTS
 # ------------------------------------------------------------
 
-def clear_pending_keys() -> None:
-    """Clear buffered key presses after a single-key prompt."""
-
-    while msvcrt.kbhit():
-        msvcrt.getwch()
-
-
 def prompt_main_menu() -> str:
-    """Print the main menu and return a single-key selection."""
+    """Print the main menu and return an Enter-confirmed selection."""
 
     print("1. Run Scan")
     print("2. Clear Artefacts")
     print("3. Exit")
     print()
-    print("Select option [1-3]: ", end="", flush=True)
 
-    key = msvcrt.getwch().strip().lower()
-    clear_pending_keys()
-
-    print(key)
-    return key
+    return input("Select option [1-3]: ").strip().lower()
 
 
 # ------------------------------------------------------------
