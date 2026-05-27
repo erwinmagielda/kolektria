@@ -1,8 +1,8 @@
 """
 Kolektria path helpers.
 
-Centralises project paths used by the collector, PowerShell runner, reporter,
-and runtime export workflow.
+Centralises project paths used by the collector, cleaner, PowerShell runner,
+reporter, and runtime export workflow.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ def get_root_dir() -> Path:
     Return the Kolektria project root directory.
 
     Source mode:
-        src/collector.py
+        src/kolektria/collector.py
 
     Executable mode:
         dist/kolektria.exe
@@ -49,6 +49,8 @@ ROOT_DIR = get_root_dir()
 # ------------------------------------------------------------
 
 SRC_DIR = ROOT_DIR / "src"
+KOLEKTRIA_DIR = SRC_DIR / "kolektria"
+UTILS_DIR = SRC_DIR / "utils"
 POWERSHELL_DIR = SRC_DIR / "powershell"
 
 DATA_DIR = ROOT_DIR / "data"

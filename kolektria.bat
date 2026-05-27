@@ -18,7 +18,8 @@ REM ------------------------------------------------------------
 cd /d "%~dp0"
 
 set "EXE_PATH=dist\kolektria.exe"
-set "PY_PATH=src\collector.py"
+set "PY_MODULE=kolektria.collector"
+set "PYTHONPATH=%CD%\src"
 set "POWERSHELL_DIR=src\powershell"
 set "RUNTIME_DIR=data\runtime"
 set "COLLECTED_DIR=data\collected"
@@ -156,18 +157,7 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-if not exist "%PY_PATH%" (
-    echo [X] Kolektria executable was not found:
-    echo     %EXE_PATH%
-    echo.
-    echo [X] Python collector source was not found:
-    echo     %PY_PATH%
-    echo.
-    pause
-    exit /b 1
-)
-
-python "%PY_PATH%"
+python -m "%PY_MODULE%"
 
 if %errorlevel% neq 0 (
     echo.

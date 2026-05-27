@@ -21,8 +21,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from cleaner import clear_generated_artefacts
-from reporter import export_markdown_report
+from kolektria.cleaner import clear_generated_artefacts
+from kolektria.reporter import export_markdown_report
 from utils.console import (
     disable_quick_edit_mode,
     print_banner,
