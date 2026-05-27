@@ -45,6 +45,14 @@ def print_banner() -> None:
     print()
 
 
+def print_menu_title() -> None:
+    """Print the compact menu title used after actions complete."""
+
+    print()
+    print("Kolektria")
+    print("-" * len("Kolektria"))
+
+
 # ------------------------------------------------------------
 # CONSOLE MODE
 # ------------------------------------------------------------
@@ -61,7 +69,6 @@ def disable_quick_edit_mode() -> None:
         return
 
     kernel32 = ctypes.windll.kernel32
-
     std_input_handle = kernel32.GetStdHandle(-10)
 
     if std_input_handle == -1:
@@ -72,12 +79,12 @@ def disable_quick_edit_mode() -> None:
     if not kernel32.GetConsoleMode(std_input_handle, ctypes.byref(mode)):
         return
 
-    ENABLE_QUICK_EDIT_MODE = 0x0040
-    ENABLE_EXTENDED_FLAGS = 0x0080
+    enable_quick_edit_mode = 0x0040
+    enable_extended_flags = 0x0080
 
     new_mode = mode.value
-    new_mode &= ~ENABLE_QUICK_EDIT_MODE
-    new_mode |= ENABLE_EXTENDED_FLAGS
+    new_mode &= ~enable_quick_edit_mode
+    new_mode |= enable_extended_flags
 
     kernel32.SetConsoleMode(std_input_handle, new_mode)
 
@@ -93,25 +100,20 @@ def clear_pending_keys() -> None:
         msvcrt.getwch()
 
 
-def confirm_scan() -> bool:
-    """Ask the user whether to run a collection scan using one key press."""
+def prompt_main_menu() -> str:
+    """Print the main menu and return a single-key selection."""
 
-    print("Run collection scan? [Y/n]: ", end="", flush=True)
+    print("1. Run Scan")
+    print("2. Clear Artefacts")
+    print("3. Exit")
+    print()
+    print("Select option [1-3]: ", end="", flush=True)
 
     key = msvcrt.getwch().strip().lower()
     clear_pending_keys()
 
-    if key in ("", "\r", "\n", "y"):
-        print("Y")
-        return True
-
-    if key == "n":
-        print("n")
-        return False
-
     print(key)
-    print_warning("Invalid selection, defaulting to scan")
-    return True
+    return key
 
 
 # ------------------------------------------------------------

@@ -21,19 +21,21 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from cleaner import clear_generated_artefacts
 from reporter import export_markdown_report
 from utils.console import (
-    confirm_scan,
     disable_quick_edit_mode,
     print_banner,
     print_detail,
     print_error,
     print_info,
+    print_menu_title,
     print_result,
     print_section,
     print_step,
     print_success,
     print_warning,
+    prompt_main_menu,
 )
 from utils.dependencies import (
     MSRC_MODULE_NAME,
@@ -525,6 +527,57 @@ def write_scan_output(scan_result: dict[str, Any]) -> None:
 
 
 # ------------------------------------------------------------
+# MENU ACTIONS
+# ------------------------------------------------------------
+
+def run_scan_action(args: argparse.Namespace) -> None:
+    """Run the scan workflow from the interactive menu."""
+
+    prepare_environment()
+    scan_result = collect_scan(max_months=args.max_months)
+    write_scan_output(scan_result)
+
+    print()
+    print_success("Run Scan completed")
+
+
+def clear_artefacts_action() -> None:
+    """Run the artefact cleanup workflow from the interactive menu."""
+
+    clear_generated_artefacts()
+
+    print()
+    print_success("Clear Artefacts completed")
+
+
+def run_menu(args: argparse.Namespace) -> int:
+    """Run the Kolektria interactive menu."""
+
+    print_banner()
+
+    while True:
+        choice = prompt_main_menu()
+
+        if choice == "1":
+            run_scan_action(args)
+            print_menu_title()
+            continue
+
+        if choice == "2":
+            clear_artefacts_action()
+            print_menu_title()
+            continue
+
+        if choice == "3":
+            print_info("Exit selected")
+            print()
+            return 0
+
+        print_warning("Invalid menu selection")
+        print_menu_title()
+
+
+# ------------------------------------------------------------
 # COMMAND LINE
 # ------------------------------------------------------------
 
@@ -556,26 +609,11 @@ def main() -> int:
 
     try:
         disable_quick_edit_mode()
-        print_banner()
-
-        if not confirm_scan():
-            print_info("Collection cancelled")
-            print()
-            return 0
-
-        prepare_environment()
-        scan_result = collect_scan(max_months=args.max_months)
-        write_scan_output(scan_result)
-
-        print()
-        print_success("Kolektria collection completed")
-        print()
-
-        return 0
+        return run_menu(args)
 
     except KeyboardInterrupt:
         print()
-        print_info("Collection cancelled")
+        print_info("Exit selected")
         print()
         return 0
 

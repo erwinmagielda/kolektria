@@ -58,6 +58,11 @@ COLLECTED_DIR = DATA_DIR / "collected"
 RESULTS_DIR = ROOT_DIR / "results"
 REPORTS_DIR = RESULTS_DIR / "reports"
 
+BUILD_DIR = ROOT_DIR / "build"
+BUILD_PYINSTALLER_DIR = BUILD_DIR / "pyinstaller"
+
+DIST_DIR = ROOT_DIR / "dist"
+
 BASELINE_SCRIPT_PATH = POWERSHELL_DIR / BASELINE_SCRIPT
 INVENTORY_SCRIPT_PATH = POWERSHELL_DIR / INVENTORY_SCRIPT
 ADAPTER_SCRIPT_PATH = POWERSHELL_DIR / ADAPTER_SCRIPT
@@ -105,7 +110,7 @@ def ensure_required_files() -> None:
 
 
 # ------------------------------------------------------------
-# RUNTIME DIRECTORIES
+# OUTPUT DIRECTORIES
 # ------------------------------------------------------------
 
 def ensure_output_directories() -> None:
