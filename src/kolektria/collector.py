@@ -69,6 +69,20 @@ def format_months(month_ids: list[str]) -> str:
     return ", ".join(month_ids)
 
 
+def print_kb_state_summary(
+    expected_count: int,
+    installed_count: int,
+    superseded_count: int,
+    missing_count: int,
+) -> None:
+    """Print a compact KB state summary."""
+
+    print_detail(f"Expected KBs: {expected_count}")
+    print_detail(f"Installed KBs: {installed_count}")
+    print_detail(f"Superseded KBs: {superseded_count}")
+    print_detail(f"Missing KBs: {missing_count}")
+
+
 # ------------------------------------------------------------
 # RUNTIME CLEANUP
 # ------------------------------------------------------------
@@ -446,9 +460,12 @@ def calculate_supersedence_summary(
     }
 
     print_result("Missing update state calculated")
-    print_detail(f"Expected KBs: {supersedence_summary['ExpectedKbs']}")
-    print_detail(f"Installed or superseded KBs: {supersedence_summary['InstalledOrSupersededKbs']}")
-    print_detail(f"Missing KBs: {supersedence_summary['MissingKbs']}")
+    print_kb_state_summary(
+        expected_count=supersedence_summary["ExpectedKbs"],
+        installed_count=supersedence_summary["InstalledKbs"],
+        superseded_count=supersedence_summary["RelationshipsResolved"],
+        missing_count=supersedence_summary["MissingKbs"],
+    )
 
     return missing_kbs, supersedence_summary
 
