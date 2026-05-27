@@ -15,15 +15,6 @@ from typing import Any
 # REPORT HELPERS
 # ------------------------------------------------------------
 
-def format_list(values: list[str], empty_value: str = "None") -> str:
-    """Return a comma-separated list or a fallback value."""
-
-    if not values:
-        return empty_value
-
-    return ", ".join(values)
-
-
 def format_value(value: Any, empty_value: str = "Unknown") -> str:
     """Return a readable value for Markdown output."""
 
@@ -31,6 +22,30 @@ def format_value(value: Any, empty_value: str = "Unknown") -> str:
         return empty_value
 
     return str(value)
+
+
+def format_identifier(value: Any, empty_value: str = "None") -> str:
+    """Return a Markdown inline-code identifier."""
+
+    if value is None or value == "":
+        return empty_value
+
+    return f"`{value}`"
+
+
+def format_identifier_list(values: list[str], empty_value: str = "None") -> str:
+    """Return a comma-separated Markdown inline-code identifier list."""
+
+    if not values:
+        return empty_value
+
+    return ", ".join(f"`{value}`" for value in values)
+
+
+def format_month_list(values: list[str], empty_value: str = "None") -> str:
+    """Return a comma-separated Markdown inline-code MonthId list."""
+
+    return format_identifier_list(values, empty_value=empty_value)
 
 
 def get_expected_kbs(kb_entries: list[dict[str, Any]]) -> list[str]:
@@ -76,18 +91,24 @@ def get_superseded_kbs(kb_entries: list[dict[str, Any]]) -> list[str]:
 # TABLE BUILDING
 # ------------------------------------------------------------
 
-def build_key_value_table(rows: list[tuple[str, Any]]) -> list[str]:
-    """Build a two-column Markdown key-value table."""
+def build_scan_outcome_table(
+    generated_at: str,
+    baseline: dict[str, Any],
+    months_requested: list[str],
+    missing_kbs: list[str],
+) -> list[str]:
+    """Build the scan outcome table with fields as columns."""
 
-    lines = [
-        "| Field | Value |",
-        "|---|---|",
+    return [
+        "| Date Generated | Operating System | Months Requested | Missing KBs |",
+        "|:---|:---|:---|:---|",
+        (
+            f"| {generated_at} "
+            f"| {format_value(baseline.get('OsName'))} "
+            f"| {format_month_list(months_requested)} "
+            f"| {len(missing_kbs)} |"
+        ),
     ]
-
-    for field, value in rows:
-        lines.append(f"| {field} | {format_value(value)} |")
-
-    return lines
 
 
 def build_kb_state_table(
@@ -95,7 +116,7 @@ def build_kb_state_table(
     installed_kbs: list[str],
     missing_kbs: list[str],
 ) -> list[str]:
-    """Build a KB state table with counts and actual KB values."""
+    """Build a KB state table with counts, KBs, and explanations."""
 
     expected_kbs = get_expected_kbs(kb_entries)
     superseded_kbs = get_superseded_kbs(kb_entries)
@@ -104,90 +125,82 @@ def build_kb_state_table(
         (
             "Expected",
             len(expected_kbs),
-            format_list(expected_kbs),
+            format_identifier_list(expected_kbs),
+            "KBs identified from MSRC advisory mappings for the requested product and month range.",
         ),
         (
             "Installed",
             len(installed_kbs),
-            format_list(installed_kbs),
+            format_identifier_list(installed_kbs),
+            "KBs detected directly from the local Windows update inventory.",
         ),
         (
             "Superseded",
             len(superseded_kbs),
-            format_list(superseded_kbs),
+            format_identifier_list(superseded_kbs),
+            "Older KBs referenced as superseded by advisory entries.",
         ),
         (
             "Missing",
             len(missing_kbs),
-            format_list(missing_kbs, "None"),
+            format_identifier_list(missing_kbs, "None"),
+            "Expected KBs not found directly and not covered by the supersedence calculation.",
         ),
     ]
 
     lines = [
-        "| KB State | Count | KBs |",
-        "|---|---|---|",
+        "| KB State | Count | KBs | Explanation |",
+        "|:---|:---|:---|:---|",
     ]
 
-    for state, count, kbs in rows:
-        lines.append(f"| {state} | {count} | {kbs} |")
+    for state, count, kbs, explanation in rows:
+        lines.append(f"| {state} | {count} | {kbs} | {explanation} |")
 
     return lines
 
 
-def build_missing_kb_evidence_table(
-    kb_entries: list[dict[str, Any]],
-    missing_kbs: list[str],
-) -> list[str]:
-    """Build a Markdown table for missing KB evidence and related CVEs."""
+def build_missing_kb_summary_table(entry: dict[str, Any]) -> list[str]:
+    """Build a compact one-row table for one missing KB."""
 
-    lines = [
-        "| ID | KB | Status | Months | CVE Count | CVEs | Supersedes | Update Type |",
-        "|---|---|---|---|---|---|---|---|",
+    kb_id = format_identifier(entry.get("KB"))
+    months = format_month_list(entry.get("Months") or [])
+    cves = entry.get("Cves") or []
+    supersedes = format_identifier_list(entry.get("Supersedes") or [])
+    update_type = format_value(entry.get("UpdateType"))
+
+    return [
+        "| KB | Status | Months | CVE Count | Supersedes | Update Type |",
+        "|:---|:---|:---|:---|:---|:---|",
+        f"| {kb_id} | Missing | {months} | {len(cves)} | {supersedes} | {update_type} |",
     ]
-
-    missing_entries = get_missing_entries(
-        kb_entries=kb_entries,
-        missing_kbs=missing_kbs,
-    )
-
-    if not missing_entries:
-        lines.append("| 0 | None | Not Missing | None | 0 | None | None | None |")
-        return lines
-
-    for index, entry in enumerate(missing_entries, start=1):
-        kb_id = format_value(entry.get("KB"))
-        months = format_list(entry.get("Months") or [])
-        cves = entry.get("Cves") or []
-        cve_count = len(cves)
-        cve_list = format_list(cves)
-        supersedes = format_list(entry.get("Supersedes") or [])
-        update_type = format_value(entry.get("UpdateType"))
-
-        lines.append(
-            f"| {index} | {kb_id} | Missing | {months} | {cve_count} | {cve_list} | {supersedes} | {update_type} |"
-        )
-
-    return lines
 
 
 def build_baseline_evidence_table(baseline: dict[str, Any]) -> list[str]:
     """Build the baseline evidence table."""
 
     rows = [
-        ("OS Name", baseline.get("OsName")),
-        ("OS Edition", baseline.get("OsEdition")),
-        ("Display Version", baseline.get("DisplayVersion")),
-        ("Build", baseline.get("Build")),
-        ("Architecture", baseline.get("Architecture")),
-        ("LCU MonthId", baseline.get("LcuMonthId")),
-        ("LCU Install Month", baseline.get("LcuInstallMonth")),
-        ("Patch Age Days", baseline.get("PatchAgeDays")),
-        ("MSRC Latest MonthId", baseline.get("MsrcLatestMonthId")),
-        ("Resolved Product MonthId", baseline.get("ResolvedProductMonthId")),
-        ("Product Hint", baseline.get("ProductNameHint")),
+        ("OS Name", format_value(baseline.get("OsName"))),
+        ("OS Edition", format_value(baseline.get("OsEdition"))),
+        ("Display Version", format_value(baseline.get("DisplayVersion"))),
+        ("Build", format_value(baseline.get("Build"))),
+        ("Architecture", format_value(baseline.get("Architecture"))),
+        ("LCU MonthId", format_identifier(baseline.get("LcuMonthId"))),
+        ("LCU Install Month", format_identifier(baseline.get("LcuInstallMonth"))),
+        ("Patch Age Days", format_value(baseline.get("PatchAgeDays"))),
+        ("MSRC Latest MonthId", format_identifier(baseline.get("MsrcLatestMonthId"))),
+        ("Resolved Product MonthId", format_identifier(baseline.get("ResolvedProductMonthId"))),
+        ("Product Hint", format_value(baseline.get("ProductNameHint"))),
     ]
 
-    return build_key_value_table(rows)
+    lines = [
+        "| Field | Value |",
+        "|:---|:---|",
+    ]
+
+    for field, value in rows:
+        lines.append(f"| {field} | {value} |")
+
+    return lines
 
 
 # ------------------------------------------------------------
@@ -198,29 +211,27 @@ def build_scan_outcome_section(
     generated_at: str,
     baseline: dict[str, Any],
     months_requested: list[str],
-    supersedence_summary: dict[str, Any],
+    missing_kbs: list[str],
 ) -> list[str]:
     """Build the scan outcome section."""
 
     lines = [
         "# Kolektria Scan Report",
         "",
-        "Kolektria is a Windows patch-state collector that gathers update, KB, MSRC, and supersedence evidence from authorised hosts. The generated JSON and Markdown report are intended for downstream Remetria analysis.",
+        "Kolektria is a Windows patch-state collector for authorised hosts. It gathers update, KB, MSRC, and supersedence evidence, then exports structured JSON and a readable Markdown report for downstream Remetria analysis.",
         "",
         "## Scan Outcome",
         "",
-        "High-level scan result and Windows advisory context.",
+        "High-level result from this collection run.",
         "",
     ]
 
     lines.extend(
-        build_key_value_table(
-            [
-                ("Date Generated", generated_at),
-                ("Operating System", baseline.get("OsName")),
-                ("Months Requested", format_list(months_requested)),
-                ("Missing KBs", supersedence_summary.get("MissingKbs")),
-            ]
+        build_scan_outcome_table(
+            generated_at=generated_at,
+            baseline=baseline,
+            months_requested=months_requested,
+            missing_kbs=missing_kbs,
         )
     )
 
@@ -239,7 +250,7 @@ def build_missing_update_state_section(
     lines = [
         "## Missing Update State",
         "",
-        "Summary of the KB states used to decide whether expected updates are present, superseded, or missing.",
+        "Breakdown of the KB sets used to decide whether expected updates are installed, superseded, or missing.",
         "",
     ]
 
@@ -265,18 +276,47 @@ def build_missing_kb_evidence_section(
     lines = [
         "## Missing KB Evidence",
         "",
-        "Evidence chain for each missing KB, including affected CVEs and supersedence data.",
+        "Each missing KB is shown as a separate evidence block. CVEs are listed outside the table so long advisory mappings stay readable.",
         "",
     ]
 
-    lines.extend(
-        build_missing_kb_evidence_table(
-            kb_entries=kb_entries,
-            missing_kbs=missing_kbs,
-        )
+    missing_entries = get_missing_entries(
+        kb_entries=kb_entries,
+        missing_kbs=missing_kbs,
     )
 
-    lines.append("")
+    if not missing_entries:
+        lines.extend(
+            [
+                "No missing KB evidence was identified.",
+                "",
+            ]
+        )
+
+        return lines
+
+    for index, entry in enumerate(missing_entries, start=1):
+        kb_id = format_identifier(entry.get("KB"))
+        cves = entry.get("Cves") or []
+
+        lines.extend(
+            [
+                f"### {index}. {kb_id}",
+                "",
+            ]
+        )
+
+        lines.extend(build_missing_kb_summary_table(entry))
+
+        lines.extend(
+            [
+                "",
+                "**Mapped CVEs:**",
+                "",
+                format_identifier_list(cves),
+                "",
+            ]
+        )
 
     return lines
 
@@ -287,7 +327,7 @@ def build_baseline_evidence_section(baseline: dict[str, Any]) -> list[str]:
     lines = [
         "## Baseline Evidence",
         "",
-        "Non-identifying Windows update-state fields used to resolve the correct MSRC product context.",
+        "Non-identifying Windows update-state fields used to resolve the MSRC product context.",
         "",
     ]
 
@@ -325,7 +365,6 @@ def build_markdown_report(scan_result: dict[str, Any]) -> str:
     installed_kbs = scan_result.get("InstalledKbs") or []
     months_requested = scan_result.get("MonthsRequested") or []
     kb_entries = scan_result.get("KbEntries") or []
-    supersedence_summary = scan_result.get("SupersedenceSummary") or {}
     missing_kbs = scan_result.get("MissingKbs") or []
 
     generated_at = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
@@ -337,7 +376,7 @@ def build_markdown_report(scan_result: dict[str, Any]) -> str:
             generated_at=generated_at,
             baseline=baseline,
             months_requested=months_requested,
-            supersedence_summary=supersedence_summary,
+            missing_kbs=missing_kbs,
         )
     )
 
