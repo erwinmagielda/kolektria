@@ -46,8 +46,9 @@ results/reports/*
 # ------------------------------------------------------------
 
 build/pyinstaller/
-dist/*
-!dist/.gitkeep
+*.spec
+!dist/
+!dist/kolektria.exe
 
 
 # ------------------------------------------------------------
