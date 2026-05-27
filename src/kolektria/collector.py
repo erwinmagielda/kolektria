@@ -543,10 +543,15 @@ def run_scan_action(args: argparse.Namespace) -> None:
 def clear_artefacts_action() -> None:
     """Run the artefact cleanup workflow from the interactive menu."""
 
-    clear_generated_artefacts()
+    cleaned = clear_generated_artefacts()
 
     print()
-    print_success("Clear Artefacts completed")
+
+    if cleaned:
+        print_success("Clear Artefacts completed")
+        return
+
+    print_info("Clear Artefacts cancelled")
 
 
 def run_menu(args: argparse.Namespace) -> int:
