@@ -25,7 +25,7 @@ def format_value(value: Any, empty_value: str = "Unknown") -> str:
 
 
 def format_identifier(value: Any, empty_value: str = "None") -> str:
-    """Return a Markdown inline-code identifier."""
+    """Return a Markdown inline-code technical identifier."""
 
     if value is None or value == "":
         return empty_value
@@ -40,12 +40,6 @@ def format_identifier_list(values: list[str], empty_value: str = "None") -> str:
         return empty_value
 
     return ", ".join(f"`{value}`" for value in values)
-
-
-def format_month_list(values: list[str], empty_value: str = "None") -> str:
-    """Return a comma-separated Markdown inline-code MonthId list."""
-
-    return format_identifier_list(values, empty_value=empty_value)
 
 
 def get_expected_kbs(kb_entries: list[dict[str, Any]]) -> list[str]:
@@ -100,12 +94,13 @@ def build_scan_outcome_table(
     """Build the scan outcome table with fields as columns."""
 
     return [
-        "| Date Generated | Operating System | Months Requested | Missing KBs |",
-        "|:---|:---|:---|:---|",
+        "| Date Generated | Operating System | Product Hint | Months Requested | Missing KBs |",
+        "|:---|:---|:---|:---|:---|",
         (
             f"| {generated_at} "
             f"| {format_value(baseline.get('OsName'))} "
-            f"| {format_month_list(months_requested)} "
+            f"| {format_identifier(baseline.get('ProductNameHint'))} "
+            f"| {format_identifier_list(months_requested)} "
             f"| {len(missing_kbs)} |"
         ),
     ]
@@ -163,7 +158,7 @@ def build_missing_kb_summary_table(entry: dict[str, Any]) -> list[str]:
     """Build a compact one-row table for one missing KB."""
 
     kb_id = format_identifier(entry.get("KB"))
-    months = format_month_list(entry.get("Months") or [])
+    months = format_identifier_list(entry.get("Months") or [])
     cves = entry.get("Cves") or []
     supersedes = format_identifier_list(entry.get("Supersedes") or [])
     update_type = format_value(entry.get("UpdateType"))
@@ -179,21 +174,21 @@ def build_baseline_evidence_table(baseline: dict[str, Any]) -> list[str]:
     """Build the baseline evidence table."""
 
     rows = [
-        ("OS Name", format_value(baseline.get("OsName"))),
+        ("Operating System", format_value(baseline.get("OsName"))),
         ("OS Edition", format_value(baseline.get("OsEdition"))),
-        ("Display Version", format_value(baseline.get("DisplayVersion"))),
-        ("Build", format_value(baseline.get("Build"))),
+        ("Display Version", format_identifier(baseline.get("DisplayVersion"))),
+        ("Build", format_identifier(baseline.get("Build"))),
         ("Architecture", format_value(baseline.get("Architecture"))),
         ("LCU MonthId", format_identifier(baseline.get("LcuMonthId"))),
         ("LCU Install Month", format_identifier(baseline.get("LcuInstallMonth"))),
         ("Patch Age Days", format_value(baseline.get("PatchAgeDays"))),
         ("MSRC Latest MonthId", format_identifier(baseline.get("MsrcLatestMonthId"))),
         ("Resolved Product MonthId", format_identifier(baseline.get("ResolvedProductMonthId"))),
-        ("Product Hint", format_value(baseline.get("ProductNameHint"))),
+        ("Product Hint", format_identifier(baseline.get("ProductNameHint"))),
     ]
 
     lines = [
-        "| Field | Value |",
+        "| Baseline Evidence | Recorded Value |",
         "|:---|:---|",
     ]
 
@@ -296,7 +291,7 @@ def build_missing_kb_evidence_section(
         return lines
 
     for index, entry in enumerate(missing_entries, start=1):
-        kb_id = format_identifier(entry.get("KB"))
+        kb_id = format_value(entry.get("KB"))
         cves = entry.get("Cves") or []
 
         lines.extend(
