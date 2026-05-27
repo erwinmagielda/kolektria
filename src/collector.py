@@ -364,7 +364,6 @@ def collect_msrc_entries(
 
     print_result("MSRC MonthId range built")
     print_detail(f"Months requested: {format_months(month_ids)}")
-    print_detail("Timeout: 240 seconds")
 
     print()
     print_step("Querying MSRC advisory data")
@@ -375,6 +374,7 @@ def collect_msrc_entries(
     for month_chunk in chunk_list(month_ids, 3):
         chunk_text = ", ".join(month_chunk)
         print_detail(f"Processing MonthId chunk: {chunk_text}")
+        print_detail("Timeout: 240 seconds")
 
         msrc_data = run_powershell_script(
             ADAPTER_SCRIPT_PATH,
