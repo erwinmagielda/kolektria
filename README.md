@@ -35,31 +35,53 @@ Kolektria focuses on reliable evidence collection rather than prioritisation. Th
 
 ## Screenshots
 
-Screenshots should be stored in `docs/screenshots/` and referenced here once the final interface and report output are locked.
+The screenshots below show Kolektria from launch through scan execution, MSRC correlation, supersedence analysis, runtime export, artefact clearing, and Markdown reporting.
 
 ### Operator Menu
 
-![Operator Menu](docs/screenshots/operator_menu.png)
+![Operator Menu](assets/operator_menu.png)
 
-The operator menu provides a simple entry point for running a scan, clearing generated artefacts, or exiting the tool.
+The operator menu provides a simple entry point for running a scan, clearing generated artefacts, or exiting the tool. The banner is shown once at startup, while later menu returns use the compact Kolektria title.
 
-### Run Scan
+### Run Scan - Host Evidence
 
-![Run Scan](docs/screenshots/run_scan.png)
+![Run Scan - Host Evidence](assets/run_scan-1.png)
 
-The scan workflow validates collector files, checks the MSRC PowerShell module, collects host evidence, queries MSRC advisory data, resolves supersedence, and exports JSON and Markdown evidence.
+The scan workflow starts by validating required collector files, checking the MSRC PowerShell module, preparing the runtime workspace, collecting Windows baseline context, and recording installed KB inventory.
+
+### Run Scan - MSRC Correlation And Supersedence
+
+![Run Scan - MSRC Correlation And Supersedence](assets/run_scan-2.png)
+
+Kolektria builds the MSRC MonthId range, queries advisory data, maps KB entries, resolves supersedence relationships, and calculates the missing update state.
+
+### Run Scan - Runtime Export
+
+![Run Scan - Runtime Export](assets/run_scan-3.png)
+
+The runtime export writes a timestamped scan JSON file, stores an archived copy, generates a Markdown report, and returns to the main menu after the scan completes.
 
 ### Clear Artefacts
 
-![Clear Artefacts](docs/screenshots/clear_artefacts.png)
+![Clear Artefacts - Review](assets/clear_artefacts-1.png)
 
-The cleanup workflow reviews generated artefact targets, confirms preserved locations, counts selected artefacts, prompts before deletion, and preserves archived scans and executable output.
+The clear workflow reviews generated artefact targets, confirms preserved locations, and shows what will be removed before cleanup proceeds.
 
-### Markdown Report
+![Clear Artefacts - Execution](assets/clear_artefacts-2.png)
 
-![Markdown Report](docs/screenshots/markdown_report.png)
+After confirmation, Kolektria clears selected generated artefacts while preserving the collected scan archive and executable output.
 
-The Markdown report summarises scan outcome, missing update state, missing KB evidence, baseline evidence, method, and collection scope.
+### Markdown Report - Missing Update State
+
+![Markdown Report - Missing Update State](assets/missing_update.png)
+
+The Markdown report presents the update-state calculation as expected, installed, superseded, and missing KB sets, with explanations for each state.
+
+### Markdown Report - Missing KB Evidence
+
+![Markdown Report - Missing KB Evidence](assets/missing_kb.png)
+
+Each missing KB is shown as a separate evidence block with status, MonthId coverage, CVE count, supersedence context, update type, and mapped CVEs.
 
 ---
 
