@@ -81,40 +81,6 @@ if %errorlevel% neq 0 (
 )
 
 REM ------------------------------------------------------------
-REM MSRC MODULE BOOTSTRAP
-REM ------------------------------------------------------------
-
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "if (Get-Module -ListAvailable -Name MsrcSecurityUpdates) { exit 0 } else { exit 1 }" >nul 2>&1
-
-if %errorlevel% neq 0 (
-    echo.
-    echo Dependency Bootstrap
-    echo --------------------
-    echo [*] Installing MSRC PowerShell module
-    echo     [i] Module: MsrcSecurityUpdates
-    echo     [i] Scope: CurrentUser
-    echo.
-
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
-        "$ErrorActionPreference = 'Stop';" ^
-        "Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Scope CurrentUser -Force;" ^
-        "Set-PSRepository -Name PSGallery -InstallationPolicy Trusted;" ^
-        "Install-Module -Name MsrcSecurityUpdates -Scope CurrentUser -Force -AllowClobber"
-
-    if %errorlevel% neq 0 (
-        echo.
-        echo [X] Failed to install MSRC PowerShell module
-        echo.
-        pause
-        exit /b 1
-    )
-
-    echo.
-    echo     [+] MSRC PowerShell module installed
-    echo.
-)
-
-REM ------------------------------------------------------------
 REM REQUIRED FILE CHECKS
 REM ------------------------------------------------------------
 

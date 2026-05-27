@@ -34,6 +34,11 @@ from utils.console import (
     print_success,
     print_warning,
 )
+from utils.dependencies import (
+    MSRC_MODULE_NAME,
+    install_msrc_module,
+    is_msrc_module_available,
+)
 from utils.paths import (
     ADAPTER_SCRIPT_PATH,
     BASELINE_SCRIPT_PATH,
@@ -266,8 +271,28 @@ def compute_supersedence(
 # ENVIRONMENT PREPARATION
 # ------------------------------------------------------------
 
+def ensure_msrc_dependency() -> None:
+    """Check and install the MSRC PowerShell module when required."""
+
+    print_step("Checking MSRC PowerShell module")
+
+    if is_msrc_module_available():
+        print_result("MSRC PowerShell module found")
+        print_detail(f"Module: {MSRC_MODULE_NAME}")
+        return
+
+    print_warning("MSRC PowerShell module missing")
+    print_detail(f"Module: {MSRC_MODULE_NAME}")
+
+    print()
+    print_step("Installing MSRC PowerShell module")
+    install_msrc_module()
+    print_result("MSRC PowerShell module installed")
+    print_detail("Scope: CurrentUser")
+
+
 def prepare_environment() -> None:
-    """Validate files and prepare runtime workspace."""
+    """Validate files, dependencies, and runtime workspace."""
 
     print_section("Environment Preparation")
 
@@ -275,6 +300,9 @@ def prepare_environment() -> None:
     ensure_required_files()
     print_result("Collector files found")
     print_detail(f"Path: {relative_path(POWERSHELL_DIR)}")
+
+    print()
+    ensure_msrc_dependency()
 
     print()
     print_step("Preparing runtime workspace")
@@ -365,13 +393,6 @@ def collect_msrc_entries(
             months_with_entries.extend(adapter_months or month_chunk)
 
         print_detail(f"Chunk KB entries: {len(entries)}")
-
-        entries = msrc_data.get("KbEntries") or []
-        adapter_months = msrc_data.get("MonthsWithProductRows") or []
-
-        if entries:
-            merge_kb_entries(merged_entries, entries)
-            months_with_entries.extend(adapter_months or month_chunk)
 
     kb_entries = normalise_kb_entries(list(merged_entries.values()))
 
